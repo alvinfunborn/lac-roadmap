@@ -1,0 +1,9 @@
+@use '../variables' as *;
+
+.lac-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+

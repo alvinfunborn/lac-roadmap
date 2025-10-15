@@ -1,0 +1,21 @@
+@use 'variables' as *;
+
+.lac-row { display: flex; align-items: center; gap: $lac-gap-8; width: 100%; }
+.lac-justify-between { justify-content: space-between; }
+.lac-justify-center { justify-content: center; }
+.lac-space { height: $lac-gap-8; }
+.lac-mb-8 { margin-bottom: $lac-gap-8; }
+.lac-mb-12 { margin-bottom: $lac-gap-12; }
+.lac-flex-wrap { flex-wrap: wrap; }
+.lac-cursor-pointer { cursor: pointer; }
+.lac-title { font-weight: 600; font-size: 18px; }
+.lac-description { font-size: 9px; opacity: 0.9; }
+.lac-tag { font-size: 12px; }
+.lac-section-title { font-weight: 600; margin-bottom: $lac-gap-8; }
+.lac-tab { margin-right: 6px; &.active { background: rgba(255,255,255,0.15); } }
+
+// Status color utilities
+.lac-todo { color: $lac-todo; }
+.lac-done { color: $lac-done; }
+.lac-na { color: $lac-na; }
+

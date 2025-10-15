@@ -1,0 +1,5 @@
+.lac-tabs { display: flex; gap: 6px; }
+.lac-tab { margin-right: 0; border-radius: 6px; padding: 4px 10px; border: 1px solid transparent; cursor: pointer; }
+.lac-tab:hover { background: rgba(255,255,255,0.10); }
+.lac-tab.active { background: rgba(211, 188, 141, 0.25); border-color: rgba(211, 188, 141, 0.65); }
+

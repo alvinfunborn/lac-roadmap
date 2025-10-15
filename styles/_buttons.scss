@@ -1,0 +1,37 @@
+@use 'variables' as *;
+
+.lac-btn {
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: $lac-radius-6;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  transition: filter 0.15s ease, transform 0.15s ease;
+  &.primary { background: $lac-primary; border-color: $lac-primary; }
+  &.danger { background: $lac-danger; border-color: $lac-danger; }
+  &.ghost { background: rgba(255, 255, 255, 0.10); border-color: rgba(255, 255, 255, 0.2); }
+  &:hover { filter: brightness(1.05); }
+  &:active { transform: translateY(1px); }
+  &.disabled, &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+// Add button variant: backgroundless plus, primary color, scale/raise on hover/active
+.lac-btn--add,
+button.lac-btn--add {
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  color: $lac-primary;
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+  font-size: 36px;
+  font-weight: 300;
+  text-align: center;
+  border-radius: 50%;
+  transition: transform 0.15s ease, filter 0.15s ease;
+  &:hover { transform: translateY(-2px) scale(1.08); filter: none; }
+  &:active { transform: translateY(-1px) scale(0.98); }
+}
+

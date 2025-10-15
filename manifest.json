@@ -1,0 +1,13 @@
+{
+  "id": "lac-roadmap",
+  "name": "LaC.Roadmap",
+  "version": "1.0.0",
+  "minAppVersion": "1.6.0",
+  "description": "Plan and record trips as structured data with map views, days grouping, and routes.",
+  "author": "alvinfunborn",
+  "authorUrl": "https://github.com/alvinfunborn",
+  "isDesktopOnly": false,
+  "js": "main.js",
+  "css": "styles.css"
+}
+

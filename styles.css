@@ -1,0 +1,417 @@
+.lac-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.lac-justify-between {
+  justify-content: space-between;
+}
+
+.lac-justify-center {
+  justify-content: center;
+}
+
+.lac-space {
+  height: 8px;
+}
+
+.lac-mb-8 {
+  margin-bottom: 8px;
+}
+
+.lac-mb-12 {
+  margin-bottom: 12px;
+}
+
+.lac-flex-wrap {
+  flex-wrap: wrap;
+}
+
+.lac-cursor-pointer {
+  cursor: pointer;
+}
+
+.lac-title {
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.lac-description {
+  font-size: 9px;
+  opacity: 0.9;
+}
+
+.lac-tag {
+  font-size: 12px;
+}
+
+.lac-section-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.lac-tab {
+  margin-right: 6px;
+}
+.lac-tab.active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.lac-todo {
+  color: #d3bc8d;
+}
+
+.lac-done {
+  color: #b3995d;
+}
+
+.lac-na {
+  color: #FF8200;
+}
+
+.lac-btn {
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.lac-btn.primary {
+  background: #d3bc8d;
+  border-color: #d3bc8d;
+}
+.lac-btn.danger {
+  background: #aa0000;
+  border-color: #aa0000;
+}
+.lac-btn.ghost {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.lac-btn:hover {
+  filter: brightness(1.05);
+}
+.lac-btn:active {
+  transform: translateY(1px);
+}
+.lac-btn.disabled, .lac-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lac-btn--add,
+button.lac-btn--add {
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  color: #d3bc8d;
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+  font-size: 36px;
+  font-weight: 300;
+  text-align: center;
+  border-radius: 50%;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.lac-btn--add:hover,
+button.lac-btn--add:hover {
+  transform: translateY(-2px) scale(1.08);
+  filter: none;
+}
+.lac-btn--add:active,
+button.lac-btn--add:active {
+  transform: translateY(-1px) scale(0.98);
+}
+
+.lf-map-selector-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.lf-map-selector {
+  position: relative;
+  width: 80vw;
+  height: 70vh;
+  background: #1e1e1e;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.lf-map-background {
+  position: absolute;
+  inset: 0;
+}
+
+.lf-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.lf-map-top-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.lf-map-search {
+  display: flex;
+  gap: 6px;
+}
+
+.lf-map-search-input {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  min-width: 280px;
+}
+
+.lf-map-search-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #3a7afe;
+  color: #fff;
+}
+
+.lf-map-search-results {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  width: 360px;
+  max-height: 280px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.lf-map-search-result {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 6px;
+}
+.lf-map-search-result:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lf-map-bottom-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.lf-btn {
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+}
+
+.lf-btn-confirm {
+  background: #3a7afe;
+  border-color: #3a7afe;
+}
+
+.lf-btn-cancel {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.lifeflow-confirm-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.lifeflow-confirm-modal {
+  width: 360px;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.lifeflow-confirm-content {
+  padding: 16px;
+}
+
+.lifeflow-confirm-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.lifeflow-confirm-message {
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+
+.lifeflow-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.lac-card {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #23262F;
+}
+
+.lac-card-content {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.lac-card-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.lac-card-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.lac-card-map {
+  width: 100px;
+  height: 100px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #222;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lac-card-map-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.lac-card-map-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #333;
+}
+
+.lac-card-map-placeholder-text {
+  font-size: 24px;
+  opacity: 0.6;
+}
+
+.lac-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.lac-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.lac-tab {
+  margin-right: 0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.lac-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lac-tab.active {
+  background: rgba(211, 188, 141, 0.25);
+  border-color: rgba(211, 188, 141, 0.65);
+}
+
+.lac-edit-modal .lf-map-search-input {
+  width: 100%;
+}
+
+.lac-map-widget {
+  width: 100%;
+  overflow: hidden;
+}
+
+.lac-aggmap {
+  position: relative;
+  width: 100%;
+  background: #222;
+  overflow: hidden;
+}
+
+.lac-aggmap-1x1 {
+  padding-top: 100%;
+}
+
+.lac-aggmap-2x1 {
+  padding-top: 50%;
+}
+
+.lac-aggmap-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.lac-roadmap-header {
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.lac-roadmap-section {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.lac-roadmapset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lac-roadmapset-list-wrapper {
+  padding: 0 12px;
+}
+
+.lac-roadmap-root {
+  color: #fff;
+  background: #000;
+}

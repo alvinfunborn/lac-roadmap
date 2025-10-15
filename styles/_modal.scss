@@ -1,0 +1,9 @@
+@use 'variables' as *;
+
+.lifeflow-confirm-mask { position: fixed; inset: 0; background: $lac-mask; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.lifeflow-confirm-modal { width: 360px; background: $lac-bg; border-radius: $lac-radius-10; overflow: hidden; box-shadow: $lac-shadow-2; }
+.lifeflow-confirm-content { padding: 16px; }
+.lifeflow-confirm-title { font-weight: 700; margin-bottom: 8px; }
+.lifeflow-confirm-message { margin-bottom: 16px; opacity: 0.9; }
+.lifeflow-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+

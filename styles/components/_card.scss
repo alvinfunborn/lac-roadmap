@@ -1,0 +1,63 @@
+@use '../variables' as *;
+
+.lac-card {
+  border-radius: $lac-radius-8;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  // box-shadow: 0 2px 12px 0 $lac-card, 0 1.5px 10px 0 rgba(0,0,0,0.30);
+  // transition: box-shadow 0.2s ease, transform 0.15s ease;
+  background: $lac-card;
+}
+
+// Card with map layout
+.lac-card-content {
+  display: flex;
+  gap: $lac-gap-12;
+  align-items: stretch;
+}
+
+.lac-card-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.lac-card-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.lac-card-map {
+  width: 100px;
+  height: 100px;
+  border-radius: $lac-radius-6;
+  overflow: hidden;
+  background: #222;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lac-card-map-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: $lac-radius-6;
+}
+
+.lac-card-map-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #333;
+}
+
+.lac-card-map-placeholder-text {
+  font-size: 24px;
+  opacity: 0.6;
+}
