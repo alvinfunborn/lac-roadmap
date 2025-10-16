@@ -5,11 +5,17 @@
 @use 'modal';
 @use 'components/card';
 @use 'components/card-list';
+@use 'components/card-calendar';
 @use 'components/tabs';
 @use 'components/edit-modal';
 @use 'components/map-widget';
 @use 'pages/roadmap-page';
 @use 'pages/roadmapset-page';
+
+.lac-roadmap-container {
+  height: 100%;
+  overflow: hidden;
+}
 
 .lac-roadmap-root {
   color: $lac-text;

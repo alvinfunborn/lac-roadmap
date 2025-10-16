@@ -18,6 +18,7 @@ export class GoogleMapProvider implements IMapProvider {
   private currentMarker: any = null;
   private containerElement: HTMLElement | null = null;
   private eventListeners: Array<{ type: string; handler: EventListener; options?: any }> = [];
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor(apiKey: string, language: 'zh' | 'en' = 'en') {
     this.apiKey = apiKey;
@@ -51,6 +52,16 @@ export class GoogleMapProvider implements IMapProvider {
       scaleControl: true,
       scaleControlOptions: { position: google.maps.ControlPosition.BOTTOM_LEFT }
     });
+    // ensure map resizes with container (pads/aspect wrappers)
+    try {
+      this.resizeObserver = new ResizeObserver(() => {
+        if (this.mapInstance && google?.maps?.event) {
+          google.maps.event.trigger(this.mapInstance, 'resize');
+        }
+      });
+      this.resizeObserver.observe(container);
+      setTimeout(() => { if (this.mapInstance && google?.maps?.event) google.maps.event.trigger(this.mapInstance, 'resize'); }, 50);
+    } catch (_) {}
     if (initialLocation && initialLocation.longitude && initialLocation.latitude) {
       const [lng, lat] = await this.convertCoordinates(initialLocation);
       this.setCenter(lng, lat, 16);
@@ -61,11 +72,17 @@ export class GoogleMapProvider implements IMapProvider {
   setCenter(lng: number, lat: number, zoom?: number): void { if (!this.mapInstance) return; this.mapInstance.setCenter({ lat, lng }); if (zoom !== undefined) this.mapInstance.setZoom(zoom); }
   addMarker(lng: number, lat: number, title?: string): any {
     if (!this.mapInstance) return null;
+    // Render a small red circle dot without labels
     if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
-      const marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat, lng }, map: this.mapInstance, title: title || 'selected' });
+      const el = document.createElement('div');
+      el.style.width = '6px';
+      el.style.height = '6px';
+      el.style.borderRadius = '50%';
+      el.style.background = '#ff3b30';
+      const marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat, lng }, map: this.mapInstance, title: title || '', content: el });
       return marker;
     }
-    const marker = new google.maps.Marker({ position: { lat, lng }, map: this.mapInstance, title: title || 'selected' });
+    const marker = new google.maps.Marker({ position: { lat, lng }, map: this.mapInstance, title: title || '', icon: { path: google.maps.SymbolPath.CIRCLE, scale: 3, fillColor: '#ff3b30', fillOpacity: 1, strokeOpacity: 0 } });
     return marker;
   }
   removeMarker(marker: any): void { if (!marker) return; marker.setMap(null); }
@@ -78,26 +95,23 @@ export class GoogleMapProvider implements IMapProvider {
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.location.longitude && result.location.latitude) {
-        let marker: any;
-        if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
-          const labelDiv = document.createElement('div'); labelDiv.className = 'lf-map-marker-number'; labelDiv.textContent = String(i + 1);
-          marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: result.location.latitude, lng: result.location.longitude }, map: this.mapInstance, title: result.name, content: labelDiv });
-          marker.addListener('click', () => onClick(i));
-        } else {
-          marker = new google.maps.Marker({ position: { lat: result.location.latitude, lng: result.location.longitude }, map: this.mapInstance, title: result.name, label: { text: String(i + 1), color: 'white', fontSize: '12px', fontWeight: 'bold' } });
-          marker.addListener('click', () => onClick(i));
-        }
+        // For generic display, show simple red dots without numbers/icons
+        const marker = this.addMarker(result.location.longitude, result.location.latitude, result.name);
+        if (marker && marker.addListener) marker.addListener('click', () => onClick(i));
         markers.push(marker); bounds.push(new google.maps.LatLng(result.location.latitude, result.location.longitude));
       }
     }
-    if (bounds.length > 0) { const mapBounds = new google.maps.LatLngBounds(); bounds.forEach((pos: any) => mapBounds.extend(pos)); this.mapInstance.fitBounds(mapBounds); }
+    // Keep the world view at minimal zoom; do not auto-zoom to bounds
+    if (this.mapInstance) {
+      try { this.mapInstance.setCenter({ lat: 0, lng: 0 }); this.mapInstance.setZoom(1); } catch (_) {}
+    }
     return markers;
   }
   clearMarkers(markers: any[]): void { markers.forEach(marker => { if (marker) { marker.setMap(null); } }); }
   onMapClick(handler: (lng: number, lat: number) => void): void { if (!this.mapInstance) return; this.mapInstance.addListener('click', (e: any) => { if (e.latLng) { const lat = e.latLng.lat(); const lng = e.latLng.lng(); handler(lng, lat); } }); }
   async convertCoordinates(location: MapLocation): Promise<[number, number]> { if (!location.longitude || !location.latitude) return [116.4074, 39.9042]; const coordSystem = location.coordinate_system || 'WGS84'; if (coordSystem.toLowerCase() === 'wgs84' || coordSystem.toLowerCase() === 'gps') return [location.longitude, location.latitude]; if (coordSystem.toLowerCase() === 'gcj-02' || coordSystem.toLowerCase() === 'gcj02') { const [lng, lat] = CoordinateConverter.gcj02ToWgs84(location.longitude, location.latitude); return [lng, lat]; } return await CoordinateConverter.convertToWgs84(location.longitude, location.latitude, coordSystem); }
   getCoordinateSystem(): string { return 'WGS84'; }
-  destroy(): void { if (this.containerElement) { this.eventListeners.forEach(({ type, handler, options }) => { this.containerElement!.removeEventListener(type, handler, options); }); this.eventListeners = []; this.containerElement = null; } this.mapInstance = null; this.currentMarker = null; }
+  destroy(): void { if (this.containerElement) { this.eventListeners.forEach(({ type, handler, options }) => { this.containerElement!.removeEventListener(type, handler, options); }); this.eventListeners = []; if (this.resizeObserver) { try { this.resizeObserver.disconnect(); } catch (_) {} this.resizeObserver = null; } this.containerElement = null; } this.mapInstance = null; this.currentMarker = null; }
 }
 
 

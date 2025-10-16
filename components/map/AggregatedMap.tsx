@@ -62,9 +62,8 @@ export default function AggregatedMap({ app, repository, settings }: Props) {
 
         if (cancelled) return;
         if (containerRef.current) {
-          // initial center: first location
-          const initial: MapLocation | undefined = locations.length > 0 ? { longitude: locations[0].lng, latitude: locations[0].lat, name: locations[0].title } : undefined;
-          await inst.initMap(containerRef.current, initial, ava);
+          // initialize to world view; fitting will occur after adding markers
+          await inst.initMap(containerRef.current, undefined, ava);
           // add markers & fit bounds via provider display helpers
           const results = locations.map(loc => ({ name: loc.title, address: '', location: { longitude: loc.lng, latitude: loc.lat, name: loc.title } })) as any[];
           inst.displaySearchMarkers(results as any, () => {});
@@ -81,8 +80,8 @@ export default function AggregatedMap({ app, repository, settings }: Props) {
     };
   }, [app, repository, settings, disabled]);
 
-  // Google/高德世界底图更接近 2:1（宽:高），避免最远缩放出现上下留白
-  const ratioClass = 'lac-aggmap-2x1';
+  // Google/高德世界底图更接近 1:1（宽:高），避免最远缩放出现上下留白
+  const ratioClass = 'lac-aggmap-3x2';
   return (
     <div className={`lac-aggmap ${ratioClass}`}>
       <div ref={containerRef} className="lac-aggmap-canvas" />

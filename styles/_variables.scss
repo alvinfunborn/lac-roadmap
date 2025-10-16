@@ -26,3 +26,9 @@ $lac-shadow-1: 0 2px 8px rgba(0, 0, 0, 0.15);
 $lac-shadow-2: 0 6px 18px rgba(0, 0, 0, 0.25);
 $lac-mask: rgba(0, 0, 0, 0.6);
 
+// CSS variables exposed for runtime usage (heatmap colors)
+:root {
+  --lac-done: #{$lac-done};
+  --lac-todo: #{$lac-todo};
+}
+

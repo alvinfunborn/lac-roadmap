@@ -2,5 +2,9 @@
 .lac-aggmap { position: relative; width: 100%; background: #222; overflow: hidden; }
 .lac-aggmap-1x1 { padding-top: 100%; }
 .lac-aggmap-2x1 { padding-top: 50%; }
+.lac-aggmap-2x1 .lac-aggmap-canvas > div img { object-fit: cover; }
+.lac-aggmap-3x2 { padding-top: 66.66%;}
 .lac-aggmap-canvas { position: absolute; inset: 0; }
+.lac-aggmap-canvas > div { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; }
+.lac-aggmap-canvas > div > div { width: 100% !important; height: 100% !important; }
 

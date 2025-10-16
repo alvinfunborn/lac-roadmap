@@ -1,0 +1,19 @@
+@use '../variables' as *;
+
+.lac-card-text {
+  position: relative;
+  overflow: hidden;
+}
+
+.lac-card-text-content { position: relative; z-index: 2; }
+
+.lac-card-calendar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1), rgba(0,0,0,0));
+          mask-image: linear-gradient(to left, rgba(0,0,0,1), rgba(0,0,0,0));
+}
+
+

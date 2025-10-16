@@ -1,3 +1,8 @@
+:root {
+  --lac-done: #b3995d;
+  --lac-todo: #d3bc8d;
+}
+
 .lac-row {
   display: flex;
   align-items: center;
@@ -282,7 +287,6 @@ button.lac-btn--add:active {
 
 .lac-card-content {
   display: flex;
-  gap: 12px;
   align-items: stretch;
 }
 
@@ -292,6 +296,26 @@ button.lac-btn--add:active {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.lac-card-text-content {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lac-card-calendar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  -webkit-mask-image: linear-gradient(to left, rgb(0, 0, 0), rgba(0, 0, 0, 0));
+  mask-image: linear-gradient(to left, rgb(0, 0, 0), rgba(0, 0, 0, 0));
 }
 
 .lac-card-title {
@@ -303,7 +327,10 @@ button.lac-btn--add:active {
 .lac-card-map {
   width: 100px;
   height: 100px;
-  border-radius: 6px;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
   overflow: hidden;
   background: #222;
   flex-shrink: 0;
@@ -316,7 +343,10 @@ button.lac-btn--add:active {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 6px;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .lac-card-map-placeholder {
@@ -338,6 +368,25 @@ button.lac-btn--add:active {
   flex-direction: column;
   gap: 8px;
   padding: 0 0 12px;
+}
+
+.lac-card-text {
+  position: relative;
+  overflow: hidden;
+}
+
+.lac-card-text-content {
+  position: relative;
+  z-index: 2;
+}
+
+.lac-card-calendar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  -webkit-mask-image: linear-gradient(to left, rgb(0, 0, 0), rgba(0, 0, 0, 0));
+  mask-image: linear-gradient(to left, rgb(0, 0, 0), rgba(0, 0, 0, 0));
 }
 
 .lac-tabs {
@@ -386,9 +435,29 @@ button.lac-btn--add:active {
   padding-top: 50%;
 }
 
+.lac-aggmap-2x1 .lac-aggmap-canvas > div img {
+  object-fit: cover;
+}
+
+.lac-aggmap-3x2 {
+  padding-top: 66.66%;
+}
+
 .lac-aggmap-canvas {
   position: absolute;
   inset: 0;
+}
+
+.lac-aggmap-canvas > div {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.lac-aggmap-canvas > div > div {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .lac-roadmap-header {
@@ -401,14 +470,37 @@ button.lac-btn--add:active {
   overflow: hidden;
 }
 
+.lac-roadmapset-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.lac-roadmapset-header {
+  flex-shrink: 0;
+}
+
+.lac-roadmapset-list-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 12px 80px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.lac-roadmapset-list-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
 .lac-roadmapset-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.lac-roadmapset-list-wrapper {
-  padding: 0 12px;
+.lac-roadmap-container {
+  height: 100%;
+  overflow: hidden;
 }
 
 .lac-roadmap-root {

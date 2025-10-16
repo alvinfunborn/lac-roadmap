@@ -1,12 +1,29 @@
-.lac-roadmapset-root { }
+.lac-roadmapset-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.lac-roadmapset-header {
+  flex-shrink: 0;
+}
+
+.lac-roadmapset-list-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 12px 80px;
+  // hide scrollbar
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
 
 .lac-roadmapset-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.lac-roadmapset-list-wrapper {
-  padding: 0 12px;
 }
 

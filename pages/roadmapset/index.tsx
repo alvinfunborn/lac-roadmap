@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import CardCalendar, { buildDailyCounts } from '../../components/CardCalendar';
 import { App, TFile } from 'obsidian';
 import { RoadmapRepository } from '../../repositories/RoadmapRepository';
 import { Roadmap, Place } from '../../types/roadmap';
@@ -76,17 +77,16 @@ function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
         
         console.log(`[StaticMap] Calculated center: ${avgLat}, ${avgLng}`);
         
-        // Create markers for all locations
-        const markers = allLocations.map((loc, index) => {
-          const color = index === 0 ? 'red' : 'blue'; // First marker (roadmap) is red, others are blue
-          return `color:${color}|${loc.latitude},${loc.longitude}`;
+        // Create tiny red dot markers for all locations (no labels/numbers)
+        const markers = allLocations.map((loc) => {
+          return `size:tiny|color:0xff3b30|${loc.latitude},${loc.longitude}`;
         }).join('&markers=');
         
         const params = new URLSearchParams({
           center: `${avgLat},${avgLng}`,
-          zoom: '10', // Slightly zoomed out to show all locations
+          zoom: '10',
           size: '100x100',
-          maptype: 'roadmap',
+          maptype: 'hybrid',
           markers: markers,
           key: settings.googleMapsApiKey
         });
@@ -143,9 +143,57 @@ function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
   );
 }
 
+// ---------------- Calendar Heatmap helpers kept for global-range computation ----------------
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function startOfWeekMonday(d: Date): Date {
+  const x = startOfDay(d);
+  const day = x.getDay(); // 0..6 (Sun..Sat)
+  // shift so that Monday is 0: Mon(1)->0, ..., Sun(0)->6
+  const offset = (day + 6) % 7;
+  x.setDate(x.getDate() - offset);
+  return x;
+}
+
+function endOfWeekSunday(d: Date): Date { const s = startOfWeekMonday(d); s.setDate(s.getDate() + 6); return s; }
+
+function formatYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  const da = `${d.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${da}`;
+}
+
+function parseDateOrNull(s?: string): Date | null {
+  if (!s) return null;
+  let raw = s.trim();
+  // Accept "YYYY-MM-DD HH:mm:ss" by converting to ISO-like string
+  if (raw.length > 10 && raw.indexOf('T') === -1 && raw.indexOf(' ') > 0) raw = raw.replace(' ', 'T');
+  let t = new Date(raw);
+  if (!isNaN(t.getTime())) return t;
+  // Try strict date-only
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (m) {
+    t = new Date(`${m[1]}T00:00:00`);
+    if (!isNaN(t.getTime())) return t;
+  }
+  console.debug('[CardCalendar] parseDate failed:', s);
+  return null;
+}
+
+// per-roadmap counts have been moved to component and re-exported for reuse above
+
+// NOTE: CardCalendar moved out.
+
 export default function RoadmapSetPage({ app, repository, settings }: Props) {
   const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
   const [mapVisible, setMapVisible] = useState(false);
+  const [globalCounts, setGlobalCounts] = useState<Record<string, number>>({});
+  const [globalRangeDays, setGlobalRangeDays] = useState<Record<string, true>>({});
 
   useEffect(() => {
     (async () => {
@@ -159,6 +207,26 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
       });
       const loadedRoadmaps = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
       setRoadmaps(loadedRoadmaps);
+      // build global counts across all roadmaps places
+      const merged: Record<string, number> = {};
+      const rangeDays: Record<string, true> = {};
+      for (const rm of loadedRoadmaps) {
+        // place counts
+        const local = buildDailyCounts(rm);
+        Object.keys(local).forEach(k => { merged[k] = (merged[k] || 0) + local[k]; });
+        // range days from roadmap start~end
+        const rs = parseDateOrNull(rm.detail?.start_time);
+        const re = parseDateOrNull(rm.detail?.end_time);
+        if (rs && re) {
+          const s = startOfDay(rs);
+          const e = startOfDay(re);
+          for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+            rangeDays[formatYMD(d)] = true;
+          }
+        }
+      }
+      setGlobalCounts(merged);
+      setGlobalRangeDays(rangeDays);
     })();
   }, [repository, app]);
 
@@ -261,12 +329,14 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
 
   return (
     <div className="lac-roadmapset-root">
-      {/* 顶部 1:1 地图 */}
-      <div className="lac-map-widget lac-mb-12">
-        <AggregatedMap app={app} repository={repository} settings={settings} />
+      {/* 顶部地图固定不滚动 */}
+      <div className="lac-roadmapset-header">
+        <div className="lac-map-widget lac-mb-12">
+          <AggregatedMap app={app} repository={repository} settings={settings} />
+        </div>
       </div>
 
-      {/* 下方卡片列表（带页边距）*/}
+      {/* 下方卡片列表（独立滚动区域）*/}
       <div className="lac-roadmapset-list-wrapper">
         <div className="lac-card-list">
           {roadmaps.map(roadmap => {
@@ -289,11 +359,14 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
               >
                 <div className="lac-card-content">
                   <div className="lac-card-text">
-                    <div className="lac-card-title">
-                      <div className={`lac-title ${statusColor}`}>{roadmap.name}</div>
-                      <div className="lac-description">&nbsp;{description}</div>
+                    <div className="lac-card-text-content">
+                      <div className="lac-card-title">
+                        <div className={`lac-title ${statusColor}`}>{roadmap.name}</div>
+                        <div className="lac-description">&nbsp;{description}</div>
+                      </div>
+                      <div className={`lac-tag`}>{dateRange}</div>
                     </div>
-                    <div className={`lac-tag`}>{dateRange}</div>
+                    <CardCalendar roadmap={roadmap} globalCounts={globalCounts} globalRangeDays={globalRangeDays} />
                   </div>
                   <StaticMap roadmap={roadmap} settings={settings} />
                 </div>

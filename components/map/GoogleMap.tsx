@@ -3,9 +3,9 @@ import { MapLocation } from '../../types/map';
 // Google Maps 配置工厂函数
 export const createGoogleMapConfig = (googleMapsApiKey?: string) => ({
   key: googleMapsApiKey,
-  center: { lat: 39.9042, lng: 116.4074 }, // 北京中心点
-  zoom: 6, // 中国全境视图缩放级别
-  mapTypeId: 'roadmap',
+  center: { lat: 0, lng: 0 }, // 世界中心
+  zoom: 1, // 最小缩放
+  mapTypeId: 'hybrid',
   mapId: 'LIFESET_LACOB_MAP'  // Map ID for AdvancedMarkerElement
 });
 

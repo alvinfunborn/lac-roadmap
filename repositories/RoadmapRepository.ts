@@ -1,6 +1,7 @@
 import { App, TFile, Notice } from 'obsidian';
 import * as TOML from 'toml';
-import * as TOMLStringify from 'tomlify-j0.4';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const TOMLStringify: any = require('tomlify-j0.4');
 import { Roadmap, Place, RouteSegment } from '../types/roadmap';
 
 export class RoadmapRepository {
@@ -82,6 +83,24 @@ export class RoadmapRepository {
               name: pData.name || linkTarget,
               detail: pData.detail || {}
             };
+            // 覆盖：若 roadmap 文档中紧随该 wikilink 行包含 start_time / end_time，则写入 place.detail
+            if (i + 1 < lines.length) {
+              const lookahead: string[] = [];
+              for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
+                const t = lines[j].trim();
+                if (t.startsWith('[[')) break; // 下一个地点开始
+                if (!t) continue;
+                lookahead.push(t);
+              }
+              for (const la of lookahead) {
+                const ms = la.match(/^start_time\s*=\s*"([^"]+)"/);
+                if (ms) (place.detail as any).start_time = ms[1];
+                const me = la.match(/^end_time\s*=\s*"([^"]+)"/);
+                if (me) (place.detail as any).end_time = me[1];
+                // 若遇到 route 行也停止继续向下看
+                if (/^route\s*=\s*\{/.test(la)) break;
+              }
+            }
             console.log(`[RoadmapRepository] Created place:`, place);
             items.push(place);
             // 尝试读取下一行是否为 route = {...}
