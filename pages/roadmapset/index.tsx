@@ -19,6 +19,7 @@ function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
   const [mapUrl, setMapUrl] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [hasCoordinates, setHasCoordinates] = useState(false);
+  const imageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const generateMapUrl = () => {
@@ -86,7 +87,7 @@ function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
           center: `${avgLat},${avgLng}`,
           zoom: '10',
           size: '100x100',
-          maptype: 'hybrid',
+          maptype: 'roadmap',  // 卡片地图使用 roadmap
           markers: markers,
           key: settings.googleMapsApiKey
         });
@@ -107,6 +108,24 @@ function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
     generateMapUrl();
   }, [roadmap, settings]);
 
+  // Image loading timeout effect - must be before any conditional returns
+  useEffect(() => {
+    if (!mapUrl || hasError || !hasCoordinates) return;
+    
+    // Set timeout for image loading (10 seconds)
+    imageTimeoutRef.current = setTimeout(() => {
+      console.error(`[StaticMap] Image load timeout for ${roadmap.name}`);
+      setHasError(true);
+    }, 10000);
+    
+    return () => {
+      if (imageTimeoutRef.current) {
+        clearTimeout(imageTimeoutRef.current);
+        imageTimeoutRef.current = null;
+      }
+    };
+  }, [mapUrl, hasError, hasCoordinates, roadmap.name]);
+
   // Don't render map container if no coordinates
   if (!hasCoordinates) {
     console.log(`[StaticMap] Not rendering map for ${roadmap.name} - no coordinates`);
@@ -125,6 +144,7 @@ function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
   }
 
   console.log(`[StaticMap] Rendering map for ${roadmap.name}`);
+  
   return (
     <div className="lac-card-map">
       <img 
@@ -132,10 +152,18 @@ function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
         alt={`Map for ${roadmap.name}`}
         className="lac-card-map-image"
         onError={() => {
+          if (imageTimeoutRef.current) {
+            clearTimeout(imageTimeoutRef.current);
+            imageTimeoutRef.current = null;
+          }
           console.error(`[StaticMap] Image load error for ${roadmap.name}`);
           setHasError(true);
         }}
         onLoad={() => {
+          if (imageTimeoutRef.current) {
+            clearTimeout(imageTimeoutRef.current);
+            imageTimeoutRef.current = null;
+          }
           console.log(`[StaticMap] Image loaded successfully for ${roadmap.name}`);
         }}
       />

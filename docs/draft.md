@@ -1,3 +1,7 @@
+> 完整需求与技术说明见：`requirements.md`、`technical.md`。
+
+---
+
 主题色:
 #ffffff
 #101820 背景色

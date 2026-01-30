@@ -1,9 +1,97 @@
-.lac-roadmap-root {
+.lac-roadmap-root { /* page root hook */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .lac-roadmap-header {
-  padding: 12px;
-  margin-bottom: 12px;
+  padding: 0px 12px;
+  flex-shrink: 0;
+  position: relative;
+  
+  // 底部横线延伸到屏幕边缘
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin-left: -12px;
+    margin-right: -12px;
+  }
+}
+
+// 标题行：紧凑，一行显示，超出滚动
+.lac-roadmap-title-row {
+  margin-bottom: 4px;
+  cursor: pointer;
+  padding: 0px 0;
+  transition: opacity 0.15s ease;
+  
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.lac-roadmap-title-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  // 隐藏滚动条
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+.lac-title-separator {
+  opacity: 0.5;
+  font-size: 14px;
+}
+
+// 标签栏：紧凑，减小上下 padding 和 margin
+.lac-roadmap-header .lac-tabs--browser {
+  position: relative;
+  padding-bottom: 2px;
+  margin-bottom: 0;
+  
+  // 标签按钮样式优化：减小上下 padding
+  .lac-tab {
+    padding: 1px 8px;
+    border-radius: 6px 6px 0 0;
+  }
+  
+  // +按钮样式：无边框，增大尺寸，增大左侧间距
+  .lac-tab:last-child {
+    border: none !important;
+    padding: 4px 12px;
+    margin-left: 12px;
+    font-size: 18px;
+    font-weight: 300;
+    background: transparent !important;
+    transition: transform 0.15s ease;
+    
+    &:hover {
+      background: transparent !important;
+      transform: scale(1.15);
+    }
+  }
+}
+
+// 与 roadmapset 列表滚动行为一致
+.lac-roadmap-list-wrapper {
+  flex: 1;
+  padding: 6px 12px 80px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  // 隐藏滚动条（多引擎兼容，忽略旧浏览器）
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+  &::-webkit-scrollbar { display: none; }
 }
 
 .lac-roadmap-section {

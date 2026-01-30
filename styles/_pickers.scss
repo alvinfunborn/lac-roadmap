@@ -1,0 +1,173 @@
+@use 'variables' as *;
+
+.lf-picker-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: $lac-mask;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lf-picker-modal {
+  background: $lac-card;
+  color: $lac-text;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 90vw;
+  max-width: 380px;
+  animation: lfPickerSlideIn 0.18s ease-out;
+}
+
+@keyframes lfPickerSlideIn {
+  from { opacity: 0; transform: scale(0.98) translateY(-8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.lf-picker-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lf-picker-title {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 4px;
+  color: $lac-text;
+}
+
+.lf-wheel-container {
+  display: flex;
+  flex-direction: row;
+  height: 260px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lf-wheel-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.lf-wheel-column:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lf-wheel-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 110px 0; /* 让选中项居中 */
+}
+
+.lf-wheel-items::-webkit-scrollbar {
+  display: none;
+}
+
+.lf-wheel-item {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.lf-wheel-item.selected {
+  color: $lac-text;
+  font-weight: 600;
+}
+
+/* 选中高亮带条 */
+.lf-wheel-column::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: rgba(211, 188, 141, 0.12);
+  border-top: 1px solid rgba(211, 188, 141, 0.35);
+  border-bottom: 1px solid rgba(211, 188, 141, 0.35);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.lf-picker-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.lf-picker-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  color: $lac-text;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+.lf-picker-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+.lf-picker-btn:hover {
+  transform: translateY(-1px);
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-confirm {
+  background: $lac-primary;
+  color: $lac-bg;
+  border: 1px solid $lac-primary;
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-confirm:hover {
+  background: lighten($lac-primary, 5%);
+  border-color: lighten($lac-primary, 5%);
+}
+
+.lf-picker-btn.lf-picker-btn-cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: $lac-text;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.lf-picker-btn.lf-picker-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: $lac-text !important;
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-clear {
+  background: $lac-danger;
+  color: #FFFFFF;
+  border: 1px solid $lac-danger;
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-clear:hover {
+  background: lighten($lac-danger, 5%);
+  border-color: lighten($lac-danger, 5%);
+}
+

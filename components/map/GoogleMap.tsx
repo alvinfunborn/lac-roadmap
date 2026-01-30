@@ -1,11 +1,12 @@
 import { MapLocation } from '../../types/map';
 
 // Google Maps 配置工厂函数
-export const createGoogleMapConfig = (googleMapsApiKey?: string) => ({
+// 地图类型：'roadmap' (地图) 或 'satellite' (卫星)
+export const createGoogleMapConfig = (googleMapsApiKey?: string, mapTypeId: 'roadmap' | 'satellite' = 'roadmap') => ({
   key: googleMapsApiKey,
   center: { lat: 0, lng: 0 }, // 世界中心
   zoom: 1, // 最小缩放
-  mapTypeId: 'hybrid',
+  mapTypeId: mapTypeId,
   mapId: 'LIFESET_LACOB_MAP'  // Map ID for AdvancedMarkerElement
 });
 
@@ -68,9 +69,10 @@ export class CoordinateConverter {
 }
 
 // 地图API加载器
-export const loadGoogleMapsAPI = (apiKey?: string, language?: 'zh' | 'en'): Promise<any> => {
+export const loadGoogleMapsAPI = (apiKey?: string, language?: 'zh' | 'en', timeout: number = 30000): Promise<any> => {
   return new Promise((resolve, reject) => {
     if (window.google && window.google.maps) {
+      console.log('[GoogleMapsAPI] Google Maps API already loaded');
       resolve(window.google.maps);
       return;
     }
@@ -78,58 +80,110 @@ export const loadGoogleMapsAPI = (apiKey?: string, language?: 'zh' | 'en'): Prom
       reject(new Error('Google Maps API key is required'));
       return;
     }
-    const script = document.createElement('script');
-    const lang = language === 'zh' ? 'zh-CN' : 'en';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=__googleMapsCallback&loading=async&libraries=marker,places&language=${lang}`;
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = 'anonymous';
-    (window as any).__googleMapsCallback = () => {
+
+    console.log(`[GoogleMapsAPI] Starting to load Google Maps API (timeout: ${timeout}ms)`);
+    let timeoutId: NodeJS.Timeout | null = null;
+    let script: HTMLScriptElement | null = null;
+    let callbackName: string | null = null;
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (callbackName && (window as any)[callbackName]) {
+        delete (window as any)[callbackName];
+      }
+      if (script && script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+
+    const onTimeout = () => {
+      cleanup();
+      reject(new Error(`Google Maps API loading timeout (${timeout}ms) - 请检查网络连接和 VPN 代理设置，确保 googleapis.com 已正确代理`));
+    };
+
+    const onError = () => {
+      cleanup();
+      reject(new Error('Failed to load Google Maps API script - 请检查网络连接和 VPN 代理设置，确保 googleapis.com 已正确代理'));
+    };
+
+    const onSuccess = () => {
+      console.log('[GoogleMapsAPI] Google Maps API loaded successfully');
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (callbackName && (window as any)[callbackName]) {
+        delete (window as any)[callbackName];
+      }
       if (window.google && window.google.maps) {
         resolve(window.google.maps);
-        delete (window as any).__googleMapsCallback;
       } else {
         reject(new Error('Google Maps API failed to load'));
       }
     };
-    script.onerror = () => {
-      delete (window as any).__googleMapsCallback;
-      reject(new Error('Failed to load Google Maps API script'));
-    };
+
+    script = document.createElement('script');
+    const lang = language === 'zh' ? 'zh-CN' : 'en';
+    callbackName = '__googleMapsCallback';
+    // 移除 loading=async 参数，因为它可能导致加载时间更长
+    const apiUrl = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${callbackName}&libraries=marker,places&language=${lang}`;
+    script.src = apiUrl;
+    script.async = true;
+    script.defer = true;
+    script.crossOrigin = 'anonymous';
+
+    console.log(`[GoogleMapsAPI] Loading script from: ${apiUrl.replace(apiKey, '***')}`);
+    (window as any)[callbackName] = onSuccess;
+    script.onerror = onError;
+
+    timeoutId = setTimeout(onTimeout, timeout);
+
     document.head.appendChild(script);
   });
 };
 
 // 使用新的 Places API (searchByText) 搜索地点
+// 注意：需在 Google Cloud 控制台启用 "Places API (New)"，否则会 400
 export const searchPlacesByGoogleAPI = async (keyword: string, apiKey: string, mapInstance?: any): Promise<any[]> => {
+  const trimmed = (keyword ?? '').trim();
+  if (!trimmed) return [];
+
   try {
     if (!window.google || !window.google.maps) {
       await loadGoogleMapsAPI(apiKey);
     }
-    const { Place } = await (google.maps as any).importLibrary('places');
+    const { Place } = await (window.google!.maps as any).importLibrary('places');
     const request: any = {
-      textQuery: keyword,
+      textQuery: trimmed,
       fields: ['displayName', 'formattedAddress', 'location'],
-      maxResultCount: 10
+      maxResultCount: 10,
+      language: 'zh-CN',
+      region: 'cn'
     };
+    // 仅在有有效地图且范围合理时加 locationBias，避免非法参数导致 400
     if (mapInstance) {
-      const bounds = mapInstance.getBounds();
-      if (bounds) {
-        request.locationBias = bounds;
-      } else {
-        const center = mapInstance.getCenter();
-        if (center) {
-          request.locationBias = {
-            center: { lat: center.lat(), lng: center.lng() },
-            radius: 50000
-          };
+      const bounds = mapInstance.getBounds?.();
+      const center = mapInstance.getCenter?.();
+      if (bounds && !bounds.isEmpty?.()) {
+        try {
+          request.locationBias = bounds.toJSON?.() ?? bounds;
+        } catch {
+          // 回退为圆心
+          if (center) {
+            request.locationBias = { center: { lat: center.lat(), lng: center.lng() }, radius: 50000 };
+          }
         }
+      } else if (center) {
+        request.locationBias = { center: { lat: center.lat(), lng: center.lng() }, radius: 50000 };
       }
     }
     const { places } = await Place.searchByText(request);
     if (places && places.length > 0) {
       return places.map((place: any) => {
-        const name = place.displayName || keyword;
+        const name = place.displayName || trimmed;
         const address = place.formattedAddress || '';
         const location = place.location;
         return {
@@ -146,7 +200,8 @@ export const searchPlacesByGoogleAPI = async (keyword: string, apiKey: string, m
       });
     }
     return [];
-  } catch (_) {
+  } catch (err) {
+    console.warn('[GoogleMap] searchPlaces 400/错误:', err);
     return [];
   }
 };
@@ -157,10 +212,10 @@ export const getAddressByCoordinates = async (lng: number, lat: number, apiKey: 
     if (!window.google || !window.google.maps) {
       await loadGoogleMapsAPI(apiKey);
     }
-    const geocoder = new google.maps.Geocoder();
+    const geocoder = new window.google!.maps.Geocoder();
     const latlng = { lat, lng };
     return new Promise((resolve) => {
-      geocoder.geocode({ location: latlng }, (results, status) => {
+      geocoder.geocode({ location: latlng }, (results: any, status: any) => {
         if (status === 'OK' && results && results[0]) {
           const result = results[0];
           let name = '';

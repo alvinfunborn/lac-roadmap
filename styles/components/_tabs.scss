@@ -3,3 +3,30 @@
 .lac-tab:hover { background: rgba(255,255,255,0.10); }
 .lac-tab.active { background: rgba(211, 188, 141, 0.25); border-color: rgba(211, 188, 141, 0.65); }
 
+// browser-like overlapping tabs with horizontal scroll
+.lac-tabs--browser {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-left: 0px;
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.lac-tabs--browser::-webkit-scrollbar { display: none; }
+.lac-tabs--browser .lac-tab {
+  border-radius: 8px 8px 0 0;
+  padding: 6px 12px;
+  margin-right: -6px; /* overlap */
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  position: relative;
+  z-index: 1;
+}
+.lac-tabs--browser .lac-tab.active {
+  background: rgba(211, 188, 141, 0.15);
+  border-color: rgba(211, 188, 141, 0.55);
+  z-index: 2;
+}
+.lac-tabs--browser .lac-tab:hover { filter: brightness(1.05); }
+

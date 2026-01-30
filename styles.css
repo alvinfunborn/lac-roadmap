@@ -1,3 +1,4 @@
+@charset "UTF-8";
 :root {
   --lac-done: #b3995d;
   --lac-todo: #d3bc8d;
@@ -140,16 +141,18 @@ button.lac-btn--add:active {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 10000;
 }
 
 .lf-map-selector {
   position: relative;
-  width: 80vw;
-  height: 70vh;
-  background: #1e1e1e;
-  border-radius: 10px;
+  width: 90vw;
+  height: 75vh;
+  background: #23262F;
+  border-radius: 16px;
   overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .lf-map-background {
@@ -168,51 +171,271 @@ button.lac-btn--add:active {
   left: 12px;
   right: 12px;
   display: flex;
+  flex-direction: column;
   gap: 8px;
+  z-index: 10;
 }
 
 .lf-map-search {
+  position: relative;
   display: flex;
-  gap: 6px;
+  align-items: center;
+  width: 100%;
 }
 
 .lf-map-search-input {
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  min-width: 280px;
+  width: 100%;
+  height: 40px;
+  padding: 0 44px 0 16px;
+  font-size: 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #1a1a1a;
+  outline: none;
+  transition: border-color 0.2s ease;
+  position: relative;
+  z-index: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.lf-map-search-input:focus {
+  border-color: #FFB612;
+  box-shadow: 0 0 0 2px rgba(255, 182, 18, 0.1);
+}
+.lf-map-search-input::placeholder {
+  color: #999;
 }
 
 .lf-map-search-btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #3a7afe;
-  color: #fff;
+  position: absolute !important;
+  left: auto !important;
+  right: 0 !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: #666 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1 !important;
+  pointer-events: auto !important;
+  font-size: 0 !important; /* 隐藏文字内容 */
+  /* 搜索图标 SVG */
+}
+.lf-map-search-btn::before {
+  content: "";
+  display: block;
+  width: 16px;
+  height: 16px;
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.lf-map-search-btn:hover:not(:disabled) {
+  background: #f0f0f0 !important;
+  color: #333 !important;
+  transform: translateY(-50%) translateY(-1px) !important;
+}
+.lf-map-search-btn:hover:not(:disabled)::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
+}
+.lf-map-search-btn:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.98) !important;
+}
+.lf-map-search-btn:disabled {
+  background: transparent !important;
+  cursor: not-allowed !important;
+  color: #ccc !important;
+  transform: translateY(-50%) !important;
+}
+.lf-map-search-btn:disabled::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
+}
+.lf-map-search-btn.lf-map-search-btn-loading::before {
+  display: none;
+}
+.lf-map-search-btn .lf-map-search-btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: rgba(0, 0, 0, 0.8);
+  border-radius: 50%;
+  animation: lf-map-search-spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 
+.lf-map-search-btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: rgba(0, 0, 0, 0.8);
+  border-radius: 50%;
+  animation: lf-map-search-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes lf-map-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .lf-map-search-results {
-  position: absolute;
-  top: 44px;
-  left: 0;
-  width: 360px;
-  max-height: 280px;
-  overflow: auto;
-  background: rgba(0, 0, 0, 0.8);
+  position: relative;
+  margin-top: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
   border-radius: 8px;
-  padding: 8px;
+  background: #FFFFFF;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  margin: 2px 0 0 0;
+  -ms-overflow-style: none;
+}
+.lf-map-search-results::-webkit-scrollbar {
+  display: none;
 }
 
 .lf-map-search-result {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
   display: flex;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 6px;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.lf-map-search-result:last-child {
+  border-bottom: none;
 }
 .lf-map-search-result:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: #f8f9fa;
+}
+
+.lf-map-search-result-number {
+  background: #dc3545;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+.lf-map-search-result-number.lf-map-search-result-highlight {
+  transform: scale(1.2);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.6);
+}
+
+.lf-map-search-result-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.lf-map-search-result-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.lf-map-search-result-address {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.lf-map-search-result-distance {
+  font-size: 11px;
+  color: #999;
+}
+
+.lf-map-search-error {
+  padding: 8px 12px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 6px;
+  color: #ff4d4f;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.lf-map-clear-btn::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
+}
+
+.lf-map-clear-btn:hover:not(:disabled)::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
+}
+
+.lf-map-clear-btn:disabled::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
+}
+
+.lf-map-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: 16px;
+}
+
+.lf-map-loading-text {
+  color: #fff;
+  font-size: 14px;
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+}
+
+.lf-map-marker-number {
+  background: #d3bc8d;
+  color: #000;
+  font-size: 12px;
+  font-weight: bold;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.lf-map-marker {
+  background: transparent;
+  color: #d3bc8d;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 0;
+  margin-bottom: -5px;
 }
 
 .lf-map-bottom-controls {
@@ -221,24 +444,94 @@ button.lac-btn--add:active {
   right: 12px;
   display: flex;
   gap: 8px;
+  z-index: 10;
 }
 
-.lf-btn {
+.lf-map-selector .lf-btn {
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: none;
   cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  font-size: 14px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.lf-map-selector .lf-btn:hover {
+  transform: translateY(-1px);
+}
+.lf-map-selector .lf-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }
 
-.lf-btn-confirm {
-  background: #3a7afe;
-  border-color: #3a7afe;
+.lf-map-selector .lf-btn-confirm {
+  background: #d3bc8d;
+  color: #000;
+  border: 1px solid #d3bc8d;
+}
+.lf-map-selector .lf-btn-confirm:hover {
+  background: rgb(218.1012658228, 198.8132911392, 159.3987341772);
+  border-color: rgb(218.1012658228, 198.8132911392, 159.3987341772);
 }
 
-.lf-btn-cancel {
-  background: rgba(255, 255, 255, 0.12);
+#lf-map-cancel-btn.lf-btn-cancel,
+.lf-map-selector .lf-btn.lf-btn-cancel {
+  height: 30px !important;
+  padding: 0 16px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  line-height: 30px !important;
+  text-align: center !important;
+  display: inline-block !important;
+  box-sizing: border-box !important;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease !important;
+  margin: 0 !important;
+  background: rgb(57, 59.7, 67.8) !important;
+  background-color: rgb(57, 59.7, 67.8) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+  outline: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+#lf-map-cancel-btn.lf-btn-cancel:hover, #lf-map-cancel-btn.lf-btn-cancel:focus, #lf-map-cancel-btn.lf-btn-cancel:focus-visible,
+.lf-map-selector .lf-btn.lf-btn-cancel:hover,
+.lf-map-selector .lf-btn.lf-btn-cancel:focus,
+.lf-map-selector .lf-btn.lf-btn-cancel:focus-visible {
+  background: rgb(68, 70.55, 78.2) !important;
+  background-color: rgb(68, 70.55, 78.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #fff !important;
+  outline: none !important;
+  transform: translateY(-1px) !important;
+}
+#lf-map-cancel-btn.lf-btn-cancel:active,
+.lf-map-selector .lf-btn.lf-btn-cancel:active {
+  background: rgb(57, 59.7, 67.8) !important;
+  background-color: rgb(57, 59.7, 67.8) !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(0) scale(0.98) !important;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0) !important;
 }
 
 .lifeflow-confirm-mask {
@@ -248,35 +541,353 @@ button.lac-btn--add:active {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 10000;
 }
 
 .lifeflow-confirm-modal {
-  width: 360px;
-  background: #000;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  background: #23262F;
+  color: #fff;
+  border-radius: 16px;
+  min-width: 280px;
+  width: 90vw;
+  max-width: 380px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 500;
 }
 
 .lifeflow-confirm-content {
-  padding: 16px;
+  padding: 18px 22px;
 }
 
 .lifeflow-confirm-title {
+  font-size: 16px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  text-align: center;
+  color: #fff;
 }
 
 .lifeflow-confirm-message {
-  margin-bottom: 16px;
+  color: #fff;
+  line-height: 1.6;
+  padding: 6px 0 14px;
+  font-weight: 500;
   opacity: 0.9;
 }
 
 .lifeflow-confirm-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.lifeflow-confirm-modal .lf-btn {
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+.lifeflow-confirm-modal .lf-btn:hover {
+  transform: translateY(-1px);
+}
+
+.lifeflow-confirm-modal .lf-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+.lifeflow-confirm-modal .lf-btn-confirm {
+  background: #d3bc8d;
+  color: #000;
+  border: 1px solid #d3bc8d;
+}
+
+.lifeflow-confirm-modal .lf-btn-confirm:hover {
+  background: rgb(218.1012658228, 198.8132911392, 159.3987341772);
+  border-color: rgb(218.1012658228, 198.8132911392, 159.3987341772);
+}
+
+.lifeflow-confirm-modal .lf-btn-confirm.danger {
+  background: #aa0000;
+  color: #FFFFFF;
+  border-color: #aa0000;
+}
+
+.lifeflow-confirm-modal .lf-btn-confirm.danger:hover {
+  background: rgb(195.5, 0, 0);
+  border-color: rgb(195.5, 0, 0);
+}
+
+.lifeflow-confirm-modal .lf-btn.lf-btn-cancel {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.lifeflow-confirm-modal .lf-btn.lf-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #fff !important;
+}
+
+.lifeflow-confirm-modal .form-grid {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  row-gap: 8px;
+  column-gap: 10px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.lifeflow-confirm-modal .form-grid label {
+  text-align: right;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.lifeflow-confirm-modal input[type=text],
+.lifeflow-confirm-modal textarea {
+  height: 38px;
+  padding: 8px 14px;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+
+.lifeflow-confirm-modal textarea {
+  min-height: 84px;
+}
+
+.lifeflow-confirm-modal .lf-input-error {
+  border-color: #dc3545 !important;
+}
+
+.lifeflow-confirm-modal .lf-field-error {
+  grid-column: 2/3;
+  color: #dc3545;
+  font-size: 10px;
+  margin-top: -6px;
+}
+
+.lifeflow-confirm-modal .lf-time-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.lifeflow-confirm-modal .lf-time-input {
+  flex: 1;
+}
+
+.lifeflow-confirm-modal .lf-address-input-group {
+  width: 100%;
+}
+
+.lifeflow-confirm-modal .lf-address-input {
+  width: 100%;
+  height: 38px;
+  padding: 8px 14px;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  cursor: pointer;
+}
+
+.lifeflow-confirm-modal .lf-address-input-clickable {
+  cursor: pointer;
+}
+
+.lf-picker-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lf-picker-modal {
+  background: #23262F;
+  color: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 90vw;
+  max-width: 380px;
+  animation: lfPickerSlideIn 0.18s ease-out;
+}
+
+@keyframes lfPickerSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.lf-picker-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lf-picker-title {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.lf-wheel-container {
+  display: flex;
+  flex-direction: row;
+  height: 260px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lf-wheel-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.lf-wheel-column:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lf-wheel-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 110px 0; /* 让选中项居中 */
+}
+
+.lf-wheel-items::-webkit-scrollbar {
+  display: none;
+}
+
+.lf-wheel-item {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+
+.lf-wheel-item.selected {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 选中高亮带条 */
+.lf-wheel-column::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: rgba(211, 188, 141, 0.12);
+  border-top: 1px solid rgba(211, 188, 141, 0.35);
+  border-bottom: 1px solid rgba(211, 188, 141, 0.35);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.lf-picker-actions {
+  display: flex;
   gap: 10px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.lf-picker-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+.lf-picker-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+.lf-picker-btn:hover {
+  transform: translateY(-1px);
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-confirm {
+  background: #d3bc8d;
+  color: #000;
+  border: 1px solid #d3bc8d;
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-confirm:hover {
+  background: rgb(218.1012658228, 198.8132911392, 159.3987341772);
+  border-color: rgb(218.1012658228, 198.8132911392, 159.3987341772);
+}
+
+.lf-picker-btn.lf-picker-btn-cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.lf-picker-btn.lf-picker-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #fff !important;
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-clear {
+  background: #aa0000;
+  color: #FFFFFF;
+  border: 1px solid #aa0000;
+}
+
+.lf-picker-modal .lf-picker-btn.lf-picker-btn-clear:hover {
+  background: rgb(195.5, 0, 0);
+  border-color: rgb(195.5, 0, 0);
 }
 
 .lac-card {
@@ -411,6 +1022,40 @@ button.lac-btn--add:active {
   border-color: rgba(211, 188, 141, 0.65);
 }
 
+.lac-tabs--browser {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-left: 0px;
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.lac-tabs--browser::-webkit-scrollbar {
+  display: none;
+}
+
+.lac-tabs--browser .lac-tab {
+  border-radius: 8px 8px 0 0;
+  padding: 6px 12px;
+  margin-right: -6px; /* overlap */
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
+  z-index: 1;
+}
+
+.lac-tabs--browser .lac-tab.active {
+  background: rgba(211, 188, 141, 0.15);
+  border-color: rgba(211, 188, 141, 0.55);
+  z-index: 2;
+}
+
+.lac-tabs--browser .lac-tab:hover {
+  filter: brightness(1.05);
+}
+
 .lac-edit-modal .lf-map-search-input {
   width: 100%;
 }
@@ -460,9 +1105,91 @@ button.lac-btn--add:active {
   height: 100% !important;
 }
 
+.lac-roadmap-root { /* page root hook */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .lac-roadmap-header {
-  padding: 12px;
-  margin-bottom: 12px;
+  padding: 0px 12px;
+  flex-shrink: 0;
+  position: relative;
+}
+.lac-roadmap-header::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin-left: -12px;
+  margin-right: -12px;
+}
+
+.lac-roadmap-title-row {
+  margin-bottom: 4px;
+  cursor: pointer;
+  padding: 0px 0;
+  transition: opacity 0.15s ease;
+}
+.lac-roadmap-title-row:hover {
+  opacity: 0.8;
+}
+
+.lac-roadmap-title-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.lac-roadmap-title-text::-webkit-scrollbar {
+  display: none;
+}
+
+.lac-title-separator {
+  opacity: 0.5;
+  font-size: 14px;
+}
+
+.lac-roadmap-header .lac-tabs--browser {
+  position: relative;
+  padding-bottom: 2px;
+  margin-bottom: 0;
+}
+.lac-roadmap-header .lac-tabs--browser .lac-tab {
+  padding: 1px 8px;
+  border-radius: 6px 6px 0 0;
+}
+.lac-roadmap-header .lac-tabs--browser .lac-tab:last-child {
+  border: none !important;
+  padding: 4px 12px;
+  margin-left: 12px;
+  font-size: 18px;
+  font-weight: 300;
+  background: transparent !important;
+  transition: transform 0.15s ease;
+}
+.lac-roadmap-header .lac-tabs--browser .lac-tab:last-child:hover {
+  background: transparent !important;
+  transform: scale(1.15);
+}
+
+.lac-roadmap-list-wrapper {
+  flex: 1;
+  padding: 6px 12px 80px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.lac-roadmap-list-wrapper::-webkit-scrollbar {
+  display: none;
 }
 
 .lac-roadmap-section {

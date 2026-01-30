@@ -1,11 +1,13 @@
 import { MapLocation } from '../../types/map';
 
-export const createAmapConfig = (gaodeWebServiceKey?: string) => ({
+// 高德地图配置工厂函数
+// 地图类型：'roadmap' (地图) 或 'satellite' (卫星)
+export const createAmapConfig = (gaodeWebServiceKey?: string, mapStyle: 'roadmap' | 'satellite' = 'roadmap') => ({
   key: gaodeWebServiceKey,
   secret: '',
   center: [116.4074, 39.9042] as [number, number],
   zoom: 6,
-  mapStyle: 'amap://styles/normal'
+  mapStyle: mapStyle === 'satellite' ? 'amap://styles/satellite' : 'amap://styles/normal'
 });
 
 export class CoordinateConverter {

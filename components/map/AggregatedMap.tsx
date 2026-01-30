@@ -16,6 +16,7 @@ export default function AggregatedMap({ app, repository, settings }: Props) {
   const providerRef = useRef<IMapProvider | null>(null);
   const [disabled, setDisabled] = useState(false);
   const [provider, setProvider] = useState<'none' | 'google' | 'gaode'>('none');
+  const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
     const prov = (settings?.mapApiProvider || 'none') as 'none' | 'google' | 'gaode';
@@ -25,7 +26,11 @@ export default function AggregatedMap({ app, repository, settings }: Props) {
   }, [settings]);
 
   useEffect(() => {
-    if (disabled) return;
+    if (disabled) {
+      setMapError(null);
+      return;
+    }
+    setMapError(null);
     let cancelled = false;
     (async () => {
       try {
@@ -68,7 +73,11 @@ export default function AggregatedMap({ app, repository, settings }: Props) {
           const results = locations.map(loc => ({ name: loc.title, address: '', location: { longitude: loc.lng, latitude: loc.lat, name: loc.title } })) as any[];
           inst.displaySearchMarkers(results as any, () => {});
         }
-      } catch (_) {
+      } catch (error: any) {
+        if (!cancelled) {
+          console.error('[AggregatedMap] Failed to initialize map:', error);
+          setMapError(error?.message || '地图加载失败，可能是网络连接问题或 API Key 配置错误');
+        }
       }
     })();
     return () => {
@@ -87,6 +96,9 @@ export default function AggregatedMap({ app, repository, settings }: Props) {
       <div ref={containerRef} className="lac-aggmap-canvas" />
       {disabled && (
         <div className="lf-map-loading"><div className="lf-map-loading-text">地图未启用或缺少 API Key</div></div>
+      )}
+      {!disabled && mapError && (
+        <div className="lf-map-loading"><div className="lf-map-loading-text">{mapError}</div></div>
       )}
     </div>
   );

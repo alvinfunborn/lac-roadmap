@@ -1,15 +1,447 @@
-.lf-map-selector-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.lf-map-selector { position: relative; width: 80vw; height: 70vh; background: #1e1e1e; border-radius: 10px; overflow: hidden; }
-.lf-map-background { position: absolute; inset: 0; }
-.lf-map-canvas { position: absolute; inset: 0; }
-.lf-map-top-controls { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 8px; }
-.lf-map-search { display: flex; gap: 6px; }
-.lf-map-search-input { padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.4); color: #fff; min-width: 280px; }
-.lf-map-search-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: #3a7afe; color: #fff; }
-.lf-map-search-results { position: absolute; top: 44px; left: 0; width: 360px; max-height: 280px; overflow: auto; background: rgba(0,0,0,0.8); border-radius: 8px; padding: 8px; }
-.lf-map-search-result { display: flex; gap: 8px; padding: 6px; border-radius: 6px; &:hover { background: rgba(255,255,255,0.06); } }
-.lf-map-bottom-controls { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 8px; }
-.lf-btn { cursor: pointer; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff; }
-.lf-btn-confirm { background: #3a7afe; border-color: #3a7afe; }
-.lf-btn-cancel { background: rgba(255,255,255,0.12); }
+@use 'variables' as *;
+
+// 地图选择器遮罩层 - 与弹窗遮罩一致
+.lf-map-selector-mask {
+  position: fixed;
+  inset: 0;
+  background: $lac-mask;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+// 地图选择器主体 - 使用 $lac-card 背景，参考弹窗风格
+.lf-map-selector {
+  position: relative;
+  width: 90vw;
+  height: 75vh;
+  background: $lac-card;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lf-map-background {
+  position: absolute;
+  inset: 0;
+}
+
+.lf-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.lf-map-top-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+// 搜索框容器 - 与 lac-lifeflow 插件一致
+.lf-map-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+// 搜索输入框 - 与 lac-lifeflow 插件一致
+.lf-map-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 44px 0 16px;
+  font-size: 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #1a1a1a;
+  outline: none;
+  transition: border-color 0.2s ease;
+  position: relative;
+  z-index: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  &:focus {
+    border-color: #FFB612;
+    box-shadow: 0 0 0 2px rgba(255, 182, 18, 0.1);
+  }
+  
+  &::placeholder {
+    color: #999;
+  }
+}
+
+// 搜索按钮 - 与 lac-lifeflow 插件一致（绝对定位在输入框内）
+.lf-map-search-btn {
+  position: absolute !important;
+  left: auto !important;
+  right: 0 !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: #666 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1 !important;
+  pointer-events: auto !important;
+  font-size: 0 !important; /* 隐藏文字内容 */
+
+  /* 搜索图标 SVG */
+  &::before {
+    content: '';
+    display: block;
+    width: 16px;
+    height: 16px;
+    background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+  
+  &:hover:not(:disabled) {
+    background: #f0f0f0 !important;
+    color: #333 !important;
+    transform: translateY(-50%) translateY(-1px) !important;
+
+    &::before {
+      background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
+    }
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(-50%) scale(0.98) !important;
+  }
+  
+  &:disabled {
+    background: transparent !important;
+    cursor: not-allowed !important;
+    color: #ccc !important;
+    transform: translateY(-50%) !important;
+
+    &::before {
+      background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
+    }
+  }
+  
+  // 加载状态下隐藏图标，显示 spinner
+  &.lf-map-search-btn-loading::before {
+    display: none;
+  }
+  
+  // 加载状态下的 spinner
+  .lf-map-search-btn-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top-color: rgba(0, 0, 0, 0.8);
+    border-radius: 50%;
+    animation: lf-map-search-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+}
+
+// 搜索按钮加载动画
+.lf-map-search-btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: rgba(0, 0, 0, 0.8);
+  border-radius: 50%;
+  animation: lf-map-search-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes lf-map-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// 搜索结果样式 - 与 lac-lifeflow 插件一致
+.lf-map-search-results {
+  position: relative;
+  margin-top: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #FFFFFF;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  margin: 2px 0 0 0;
+  
+  // 隐藏滚动条但保持滚动功能
+  -ms-overflow-style: none; // IE and Edge
+  
+  &::-webkit-scrollbar {
+    display: none; // Chrome, Safari, Opera
+  }
+}
+
+// 搜索结果项 - 与 lac-lifeflow 插件一致
+.lf-map-search-result {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  
+  &:last-child {
+    border-bottom: none;
+  }
+  
+  &:hover {
+    background: #f8f9fa;
+  }
+}
+
+.lf-map-search-result-number {
+  background: #dc3545;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  
+  &.lf-map-search-result-highlight {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.6);
+  }
+}
+
+.lf-map-search-result-content {
+  flex: 1;
+  min-width: 0;
+}
+
+// 搜索结果文本样式 - 与 lac-lifeflow 插件一致
+.lf-map-search-result-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.lf-map-search-result-address {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.lf-map-search-result-distance {
+  font-size: 11px;
+  color: #999;
+}
+
+// 搜索错误提示样式 - 与 lac-lifeflow 一致
+.lf-map-search-error {
+  padding: 8px 12px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 6px;
+  color: #ff4d4f;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+// 清除按钮的 X 图标 - 与 lac-lifeflow 插件一致
+.lf-map-clear-btn::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
+}
+
+.lf-map-clear-btn:hover:not(:disabled)::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
+}
+
+.lf-map-clear-btn:disabled::before {
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
+}
+
+// 地图加载状态样式
+.lf-map-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: 16px;
+}
+
+.lf-map-loading-text {
+  color: $lac-text;
+  font-size: 14px;
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+}
+
+// 地图标记编号样式
+.lf-map-marker-number {
+  background: $lac-primary;
+  color: $lac-bg;
+  font-size: 12px;
+  font-weight: bold;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+// 地图标记样式
+.lf-map-marker {
+  background: transparent;
+  color: $lac-primary;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 0;
+  margin-bottom: -5px;
+}
+
+.lf-map-bottom-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+// 地图选择器内的按钮样式 - 与弹窗按钮完全一致
+.lf-map-selector .lf-btn {
+  height: 30px;
+  padding: 0 16px;
+  border-radius: $lac-radius-8;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  color: $lac-text;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  font-size: 14px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-appearance: none;
+  appearance: none;
+  
+  &:hover {
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+// 确定按钮样式
+.lf-map-selector .lf-btn-confirm {
+  background: $lac-primary;
+  color: $lac-bg;
+  border: 1px solid $lac-primary;
+  
+  &:hover {
+    background: lighten($lac-primary, 5%);
+    border-color: lighten($lac-primary, 5%);
+  }
+}
+
+// 取消按钮样式 - 使用 ID 选择器确保最高优先级，解决移动端样式覆盖问题
+#lf-map-cancel-btn.lf-btn-cancel,
+.lf-map-selector .lf-btn.lf-btn-cancel {
+  // 基础样式
+  height: 30px !important;
+  padding: 0 16px !important;
+  border-radius: $lac-radius-8 !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  line-height: 30px !important;
+  text-align: center !important;
+  display: inline-block !important;
+  box-sizing: border-box !important;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease !important;
+  margin: 0 !important;
+  
+  // 颜色样式 - 确保覆盖所有可能的样式
+  // 使用 mix 函数混合背景色和白色，模拟弹窗按钮在深色背景上的效果，同时保证在地图上的可见性
+  background: mix(#fff, $lac-card, 10%) !important; 
+  background-color: mix(#fff, $lac-card, 10%) !important;
+  background-image: none !important; // 防止背景图覆盖
+  color: $lac-text !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+  outline: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  
+  &:hover,
+  &:focus,
+  &:focus-visible {
+    // hover 时稍微变亮，与弹窗按钮交互一致 (mix 15%)
+    background: mix(#fff, $lac-card, 15%) !important;
+    background-color: mix(#fff, $lac-card, 15%) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: $lac-text !important;
+    outline: none !important;
+    transform: translateY(-1px) !important;
+  }
+  
+  &:active {
+    // active 时恢复或略微变化
+    background: mix(#fff, $lac-card, 10%) !important;
+    background-color: mix(#fff, $lac-card, 10%) !important;
+    color: $lac-text !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(0) scale(0.98) !important;
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0) !important;
+  }
+}
 

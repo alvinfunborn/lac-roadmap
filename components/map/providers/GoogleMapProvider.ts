@@ -25,9 +25,10 @@ export class GoogleMapProvider implements IMapProvider {
     this.language = language;
   }
 
-  async initMap(container: HTMLElement, initialLocation?: MapLocation, availableProviders?: string[]): Promise<void> {
+  async initMap(container: HTMLElement, initialLocation?: MapLocation, availableProviders?: string[], mapType: 'roadmap' | 'satellite' = 'satellite'): Promise<void> {
     await loadGoogleMapsAPI(this.apiKey, this.language);
-    const config = createGoogleMapConfig(this.apiKey);
+    // 默认使用卫星图层（用于顶部地图），可通过参数指定
+    const config = createGoogleMapConfig(this.apiKey, mapType);
     this.containerElement = container;
     const stopPropagation = (e: Event) => e.stopPropagation();
     const addListener = (type: string, handler: EventListener, options?: any) => { container.addEventListener(type, handler, options); this.eventListeners.push({ type, handler, options }); };
@@ -91,20 +92,47 @@ export class GoogleMapProvider implements IMapProvider {
   displaySearchMarkers(results: MapSearchResult[], onClick: (index: number) => void): any[] {
     if (!this.mapInstance || !results.length) return [];
     const markers: any[] = [];
-    const bounds: any[] = [];
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.location.longitude && result.location.latitude) {
-        // For generic display, show simple red dots without numbers/icons
-        const marker = this.addMarker(result.location.longitude, result.location.latitude, result.name);
-        if (marker && marker.addListener) marker.addListener('click', () => onClick(i));
-        markers.push(marker); bounds.push(new google.maps.LatLng(result.location.latitude, result.location.longitude));
+        let marker: any;
+        
+        // 优先使用 AdvancedMarkerElement
+        if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+          // 创建数字标签元素
+          const labelDiv = document.createElement('div');
+          labelDiv.className = 'lf-map-marker-number';
+          labelDiv.textContent = String(i + 1);
+          
+          marker = new google.maps.marker.AdvancedMarkerElement({
+            position: { lat: result.location.latitude, lng: result.location.longitude },
+            map: this.mapInstance,
+            title: result.name,
+            content: labelDiv
+          });
+          
+          marker.addListener('click', () => onClick(i));
+        } else {
+          // 回退到经典 Marker
+          marker = new google.maps.Marker({
+            position: { lat: result.location.latitude, lng: result.location.longitude },
+            map: this.mapInstance,
+            title: result.name,
+            label: {
+              text: String(i + 1),
+              color: 'white',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }
+          });
+          
+          marker.addListener('click', () => onClick(i));
+        }
+        
+        markers.push(marker);
       }
     }
-    // Keep the world view at minimal zoom; do not auto-zoom to bounds
-    if (this.mapInstance) {
-      try { this.mapInstance.setCenter({ lat: 0, lng: 0 }); this.mapInstance.setZoom(1); } catch (_) {}
-    }
+    // 不修改地图缩放和中心点，只添加标记
     return markers;
   }
   clearMarkers(markers: any[]): void { markers.forEach(marker => { if (marker) { marker.setMap(null); } }); }
