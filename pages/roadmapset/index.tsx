@@ -497,8 +497,9 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
 
       {/* Hero map readOnly viewer — opened by clicking the header map.
           Aggregates every geocoded place across all loaded roadmaps so the
-          viewer mirrors what AggregatedMap renders in the hero, but in a
-          context where pan/zoom actually works. */}
+          viewer mirrors what AggregatedMap renders in the hero. Marker style
+          is forced to `circle` + polyline off so the viewer matches the
+          hero's set-mode visual (single-colour scatter, no path). */}
       <MapSelector
         visible={mapVisible}
         initialLocation={undefined}
@@ -524,6 +525,8 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
           }
           return locs;
         })()}
+        routeMarkerStyle="circle"
+        showRoutePolyline={false}
         readOnly
       />
     </div>

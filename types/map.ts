@@ -32,6 +32,15 @@ export interface MapSelectorProps {
    *  Route overlay (`routeLocations`) 照常渲染，所以这是「点开缩略图看
    *  全景」的最便宜路径。 */
   readOnly?: boolean;
+  /** Route overlay marker style. `'number'` (default) draws numbered pins
+   *  matching `useNumberedMarkers` AggregatedMap (per-trip view). `'circle'`
+   *  draws single-colour dots matching the roadmapset hero (aggregated
+   *  scatter — no per-place ranking). */
+  routeMarkerStyle?: 'number' | 'circle';
+  /** Whether to draw the connecting polyline between successive route
+   *  locations. Defaults to `true` for trip-style overlays; pass `false`
+   *  for set-style aggregations where the points have no path semantics. */
+  showRoutePolyline?: boolean;
 }
 
 

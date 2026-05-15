@@ -37,7 +37,11 @@ function toTargetCoords(loc: MapLocation, targetIsWgs84: boolean): { lng: number
   return { lng, lat };
 }
 
-export default function MapSelector({ visible, initialLocation, onCancel, onConfirm, settings, routeLocations, readOnly }: MapSelectorProps) {
+export default function MapSelector({ visible, initialLocation, onCancel, onConfirm, settings, routeLocations, readOnly, routeMarkerStyle, showRoutePolyline }: MapSelectorProps) {
+  // Defaults: numbered + polyline (trip style). Pass routeMarkerStyle='circle'
+  // + showRoutePolyline=false to mirror the roadmapset hero AggregatedMap.
+  const effectiveMarkerStyle: 'number' | 'circle' = routeMarkerStyle || 'number';
+  const effectiveShowPolyline = showRoutePolyline !== false;
   // 地图关闭条件：none 或缺少对应 key
   const provider = (settings?.mapApiProvider || 'none') as string;
   const hasKey = provider === 'google' ? !!settings?.googleMapsApiKey : provider === 'gaode' ? !!(settings?.gaodeJsApiKey || settings?.gaodeWebServiceKey) : false;
@@ -87,8 +91,8 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
       if (pt) points.push({ ...pt, title: loc.name || '' });
     }
     if (points.length === 0) return;
-    // Connecting polyline first, then numbered markers on top.
-    if (points.length >= 2) {
+    // Connecting polyline first (if enabled), then markers on top.
+    if (effectiveShowPolyline && points.length >= 2) {
       const segs = [] as Array<{ path: Array<[number, number]>; style: 'solid' | 'dashed'; color?: string }>;
       for (let i = 0; i < points.length - 1; i++) {
         const a = points[i];
@@ -103,7 +107,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
       location: { longitude: p.lng, latitude: p.lat, name: p.title },
     }));
     try {
-      routeMarkersRef.current = inst.displaySearchMarkers(results, () => {}, { markerStyle: 'number' });
+      routeMarkersRef.current = inst.displaySearchMarkers(results, () => {}, { markerStyle: effectiveMarkerStyle });
     } catch {}
     // Only fit-bounds when the user does NOT have a focused point already
     // (e.g. opening the picker fresh, with no initial location). When
