@@ -62,10 +62,17 @@ class RoadmapView extends ItemView {
         if (this.reactRoot && this.rootEl) {
           const repo = this.repository;
           const isEntry = await repo.isValidEntry();
+          // `leaf: this.leaf` MUST be passed on every render — including the
+          // setState path. Without it, in-place view switches (roadmap → set
+          // via leaf.history.back(), set → roadmap via setViewState) hand the
+          // newly mounted page a `leaf` prop of undefined, so its next
+          // navigation falls through to `getLeaf(false)` which can land on
+          // any other active leaf — producing the "card click opens a new
+          // tab" symptom and the back-pop-only-current-tab loop.
           if (isEntry) {
-            this.reactRoot.render(React.createElement(RoadmapSetPage, { app: this.plugin.app, repository: repo, settings: this.plugin.settings }));
+            this.reactRoot.render(React.createElement(RoadmapSetPage, { app: this.plugin.app, repository: repo, settings: this.plugin.settings, leaf: this.leaf }));
           } else {
-            this.reactRoot.render(React.createElement(RoadmapPage, { app: this.plugin.app, repository: repo, filePath: this.filePath, settings: this.plugin.settings }));
+            this.reactRoot.render(React.createElement(RoadmapPage, { app: this.plugin.app, repository: repo, filePath: this.filePath, settings: this.plugin.settings, leaf: this.leaf }));
           }
         }
       }

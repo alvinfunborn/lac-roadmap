@@ -122,17 +122,23 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
     setEditModalVisible(false);
   };
 
+  /** Resolve the leaf to navigate on. Prefer the leaf RoadmapView injected
+   *  via props (always the right answer when present). Fall back through
+   *  any existing lac-roadmap-view leaf before resorting to
+   *  `getLeaf(false)` — the latter returns whatever's currently active,
+   *  which under focus drift can be a totally unrelated markdown leaf,
+   *  producing the "card click opens a new page" symptom. */
+  const resolveTargetLeaf = (): WorkspaceLeaf => {
+    return leaf
+      || app.workspace.getLeavesOfType('lac-roadmap-view')[0]
+      || app.workspace.getLeaf(false);
+  };
+
   const openRoadmap = async (roadmap: Roadmap) => {
     try {
       const dest = app.metadataCache.getFirstLinkpathDest(roadmap.id, repository.getRootPath());
       if (dest && dest instanceof TFile) {
-        // Navigate IN-PLACE on the leaf hosting THIS roadmapset view.
-        // `app.workspace.getLeaf(false)` was unreliable here — depending
-        // on focus state Obsidian sometimes returned a different leaf
-        // (or spawned a fresh one), giving the trip page an empty
-        // history stack and breaking the back button. Using the leaf
-        // passed in from RoadmapView removes that ambiguity entirely.
-        const target = leaf || app.workspace.getLeaf(false);
+        const target = resolveTargetLeaf();
         await target.setViewState({ type: 'lac-roadmap-view', state: { filePath: dest.path }, active: true });
         app.workspace.revealLeaf(target);
       }
@@ -227,8 +233,7 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
     setRoadmaps(sortRoadmaps(loaded, ids));
     const dest = app.metadataCache.getFirstLinkpathDest(newName, repository.getRootPath());
     if (dest && dest instanceof TFile) {
-      // Same rationale as openRoadmap — pin to this view's actual leaf.
-      const target = leaf || app.workspace.getLeaf(false);
+      const target = resolveTargetLeaf();
       await target.setViewState({ type: 'lac-roadmap-view', state: { filePath: dest.path }, active: true });
       app.workspace.revealLeaf(target);
     }

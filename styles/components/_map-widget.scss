@@ -106,6 +106,13 @@
 .lac-aggmap-canvas .gm-style,
 .lac-aggmap-canvas .gm-style > div { width: 100% !important; height: 100% !important; pointer-events: auto !important; }
 
+/* Defensive: ensure the canvas itself + its immediate provider root keep
+   pointer-events on. Some Obsidian themes ship `*, *::before { pointer-events:
+   ... }` resets that can stomp the auto default; this restores it without
+   touching deeper provider-set rules (e.g. SVG markers with intentional
+   `pointer-events: none`). */
+.lac-aggmap-canvas { pointer-events: auto !important; }
+
 // ─────────────────────────────────────────────────────────────────────────
 // Floating chips — sit above every layer (gold overlay, vignette, bottom
 // mask) so they read at full contrast. All use mono lettering to echo the

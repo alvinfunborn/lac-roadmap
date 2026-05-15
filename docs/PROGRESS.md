@@ -128,6 +128,11 @@
 - 用户 Vault 数据一致性问题（§8.2.3 / §8.2.6）属于数据治理，不在代码范围（Wave 1 已修当时存在的重复 `[[秋叶原]]`）
 - 路径规划失败时的离线 fallback（当前为 Notice 提示，后续可考虑用直线距离作为默认值）
 
+### Wave 7 后 BUG 修复
+
+- **roadmapset 卡片点击开新 tab + goBack 历史堆积**：✅ 修复（v1.3.1）。根因是 `main.ts:RoadmapView.setState` 在 in-place 切换 view 时**漏传 `leaf: this.leaf`**——首次 onOpen 传了 leaf，但后续 setState 重新渲染没传，导致 RoadmapSetPage / RoadmapPage 的 `leaf` prop 变 undefined，下次 navigation 落到 `getLeaf(false)` fallback，目标 leaf 不可控（可能落在别的 markdown tab 上），视觉上像"新页面"。修复：(1) `setState` 两处 `React.createElement` 都补 `leaf: this.leaf`；(2) `RoadmapSetPage.openRoadmap` / `handleCopyRoadmap` 抽出 `resolveTargetLeaf()` helper，fallback 链改为 `prop → existing lac-roadmap-view leaf → getLeaf(false)`；(3) `RoadmapPage.handlePlaceClick`（点 sub-roadmap 卡片）应用同样的 fallback 链。
+- **顶部 hero map 无法交互**：⚠️ 防御性修复（v1.3.1，待用户验证）。静态分析未定位到明确拦截层（`.lac-aggmap-canvas` 内联 `pointerEvents: 'auto'` + 各 ::before/::after 装饰层都已 `pointer-events: none`，AmapProvider/GoogleMapProvider 都已删除历史的 `stopPropagation` 监听）。本次给 `.lac-aggmap-canvas` 加 `pointer-events: auto !important`，防止某些 Obsidian 主题的 `*` 通配重置静默关闭交互。**若仍无法修复，需要 DevTools 抓事件捕获链路定位实际拦截层**——可能候选：(a) 主题级 `pointer-events` 通配 reset；(b) Obsidian workspace 的 split / leaf 容器加了 capture-phase listener；(c) 某个 React 父组件（不在我审过的范围）加了 onPointerDown 阻止冒泡；(d) `filter` + `mix-blend-mode` 组合在某些显卡驱动下的 hit-testing bug。
+
 ## 后续建议
 
 - AggregatedMap legend 已实现颜色区分；未来可考虑：地图地点 marker 着色按"已完成 / 进行中 / 未开始"三态色

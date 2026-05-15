@@ -226,11 +226,17 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
 
   // Place click routes either to a sub-roadmap (if this place IS one) or
   // to the place editor. Centralised here so Timeline doesn't need to know
-  // about subRouteMap or the host leaf.
+  // about subRouteMap or the host leaf. Same leaf-resolution chain as
+  // RoadmapSetPage.openRoadmap — prefer the injected hostLeaf, fall
+  // through to any existing lac-roadmap-view leaf, then activeLeaf as a
+  // last resort. Avoids landing on an unrelated tab and breaking the
+  // history-back navigation.
   const handlePlaceClick = async (p: Place, _itemIndex: number) => {
     const subPath = subRouteMap[p.id];
     if (subPath) {
-      const target = hostLeaf || app.workspace.activeLeaf;
+      const target = hostLeaf
+        || app.workspace.getLeavesOfType('lac-roadmap-view')[0]
+        || app.workspace.activeLeaf;
       if (target) {
         await target.setViewState({ type: 'lac-roadmap-view', state: { filePath: subPath }, active: true });
         app.workspace.revealLeaf(target);
