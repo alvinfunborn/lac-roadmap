@@ -6,6 +6,7 @@ import { RoadmapSettings } from '../../types';
 import PlaceEditModal from '../../components/modals/PlaceEditModal';
 import RouteSegmentEditModal from '../../components/modals/RouteSegmentEditModal';
 import RoadmapEditModal, { RoadmapEditPayload } from '../../components/modals/RoadmapEditModal';
+import MapSelector from '../../components/map/MapSelector';
 import { isPlace } from '../../utils/typeGuards';
 import { compareGroupKey, isDateKey } from '../../utils/date';
 import { exportPlainText, exportICS, exportMarkdown, exportGpx } from '../../services/RoadmapExportService';
@@ -42,6 +43,11 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
   // geocoded place address。供 `+ transit` 占位计算直线距离 / 自动路由用。
   const [subEndpoints, setSubEndpoints] = useState<Record<string, { start?: Address; end?: Address }>>({});
   const [routeEditState, setRouteEditState] = useState<RouteEditTrigger | null>(null);
+  // Hero map viewer (read-only MapSelector). Hero AggregatedMap can't be
+  // interacted with directly due to a Chromium hit-testing quirk with
+  // the warm-ink overlay combo (see _map-widget.scss); clicking opens
+  // this viewer instead so users can pan/zoom the same locations.
+  const [heroViewerVisible, setHeroViewerVisible] = useState(false);
   const cardListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -274,6 +280,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
           mapLocations={mapLocations}
           onBack={goBack}
           onOpenMetaEditor={openMetaEditor}
+          onHeroMapClick={() => setHeroViewerVisible(true)}
         />
         <DayTabsStrip
           tabDefs={tabDefs}
@@ -379,6 +386,24 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         settings={settings}
         onCancel={() => places.setSubRoadmapEditorVisible(false)}
         onConfirm={places.onCreateSubRoadmap}
+      />
+
+      {/* Hero map readOnly viewer — opened by clicking the header map.
+          Re-uses MapSelector in readOnly mode (same as RoadmapEditModal's
+          where-thumb viewer) so the trip's locations are pan/zoom-able in
+          a context that doesn't trigger the hero hit-testing bug. */}
+      <MapSelector
+        visible={heroViewerVisible}
+        onCancel={() => setHeroViewerVisible(false)}
+        onConfirm={() => setHeroViewerVisible(false)}
+        settings={settings}
+        routeLocations={mapLocations.map(l => ({
+          name: l.title,
+          longitude: l.lng,
+          latitude: l.lat,
+          coordinate_system: l.coordinate_system,
+        }))}
+        readOnly
       />
     </div>
   );

@@ -106,12 +106,43 @@
 .lac-aggmap-canvas .gm-style,
 .lac-aggmap-canvas .gm-style > div { width: 100% !important; height: 100% !important; pointer-events: auto !important; }
 
-/* Defensive: ensure the canvas itself + its immediate provider root keep
-   pointer-events on. Some Obsidian themes ship `*, *::before { pointer-events:
-   ... }` resets that can stomp the auto default; this restores it without
-   touching deeper provider-set rules (e.g. SVG markers with intentional
-   `pointer-events: none`). */
-.lac-aggmap-canvas { pointer-events: auto !important; }
+/* The hero placement of `.lac-aggmap` (top-of-page summary inside
+   `.lac-map-widget`) is a known non-interactive context — the combination of
+   `isolation: isolate` + child `filter` + `::before mix-blend-mode: overlay`
+   triggers a Chromium hit-testing path where pointer-events: none on the
+   pseudo-elements doesn't actually pass through to the map canvas underneath.
+   The hero is therefore rendered as a "click to expand" preview: pages wrap
+   it in `.lac-map-widget--clickable` (cursor + ↗ chip) and intercept clicks
+   to open MapSelector in readOnly mode, where the map IS interactive. The
+   bug only affects the hero preview; MapSelector inside the modal works
+   normally because it doesn't have the filter/blend-mode/isolate combo. */
+.lac-map-widget--clickable {
+  cursor: pointer;
+  position: relative;
+  // Subtle hover affordance on the wrapper: lift the box-shadow + border
+  // tint so the user gets a real "this is a button" cue before clicking.
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  &:hover { border-color: var(--hairline-strong); box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.6); }
+  &:active { box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.5); }
+}
+// Corner "expand" affordance — sits over the map at top-right, mono
+// uppercase to match the Field Journal vocabulary.
+.lac-map-widget-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 8;
+  padding: 4px 8px;
+  background: rgba(14, 19, 22, 0.78);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  pointer-events: none;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Floating chips — sit above every layer (gold overlay, vignette, bottom

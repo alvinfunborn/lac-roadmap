@@ -386,8 +386,16 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
         <div className="lac-roadmapset-stats">
           <RoadmapSetStats roadmaps={roadmaps} />
         </div>
-        <div className="lac-map-widget">
+        <div
+          className="lac-map-widget lac-map-widget--clickable"
+          onClick={() => setMapVisible(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMapVisible(true); } }}
+          aria-label="点击放大地图"
+        >
           <AggregatedMap app={app} repository={repository} settings={settings} />
+          <span className="lac-map-widget-expand">↗ expand</span>
         </div>
       </div>
 
@@ -487,17 +495,36 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
         onConfirm={onConfirmCreate}
       />
 
-      {/* 复用 MapSelector 作为聚合地图的承载（仅展示，不保存）*/}
+      {/* Hero map readOnly viewer — opened by clicking the header map.
+          Aggregates every geocoded place across all loaded roadmaps so the
+          viewer mirrors what AggregatedMap renders in the hero, but in a
+          context where pan/zoom actually works. */}
       <MapSelector
         visible={mapVisible}
         initialLocation={undefined}
         onCancel={() => setMapVisible(false)}
         onConfirm={() => setMapVisible(false)}
-        settings={{
-          mapApiProvider: settings.mapApiProvider,
-          gaodeWebServiceKey: settings.gaodeWebServiceKey,
-          googleMapsApiKey: settings.googleMapsApiKey
-        }}
+        settings={settings}
+        routeLocations={(() => {
+          const locs: { name: string; longitude: number; latitude: number; coordinate_system?: string }[] = [];
+          for (const rm of roadmaps) {
+            for (const it of rm.items || []) {
+              if (it && typeof it === 'object' && 'name' in it && 'detail' in it) {
+                const addr: any = (it as any).detail?.address;
+                if (addr && typeof addr.longitude === 'number' && typeof addr.latitude === 'number') {
+                  locs.push({
+                    name: (it as any).name || '',
+                    longitude: addr.longitude,
+                    latitude: addr.latitude,
+                    coordinate_system: addr.coordinate_system,
+                  });
+                }
+              }
+            }
+          }
+          return locs;
+        })()}
+        readOnly
       />
     </div>
   );

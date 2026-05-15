@@ -15,6 +15,12 @@ interface Props {
   mapLocations: MapLocationItem[];
   onBack: () => void;
   onOpenMetaEditor: () => void;
+  /** Click handler for the hero map area. The hero AggregatedMap is
+   *  non-interactive (Chromium hit-testing bug with the warm-ink overlay
+   *  combo — see _map-widget.scss); the parent wires this to a readOnly
+   *  MapSelector viewer modal so users can pan/zoom the same locations
+   *  in an interactive context. */
+  onHeroMapClick?: () => void;
 }
 
 // Trip detail header section — back btn + eyebrow + serif tinted title +
@@ -23,7 +29,7 @@ interface Props {
 // wrapper (which also hosts DayTabsStrip below the hero map) stays in
 // index.tsx. Title tint follows trip status via `lac-roadmap-title--{kind}`.
 export default function RoadmapHeader({
-  app, repository, settings, data, filePath, mapLocations, onBack, onOpenMetaEditor,
+  app, repository, settings, data, filePath, mapLocations, onBack, onOpenMetaEditor, onHeroMapClick,
 }: Props) {
   const s = data?.detail?.start_time;
   const e = data?.detail?.end_time;
@@ -67,7 +73,14 @@ export default function RoadmapHeader({
       <div className="lac-roadmap-stats">
         <RoadmapStats roadmap={data} />
       </div>
-      <div className="lac-map-widget">
+      <div
+        className={`lac-map-widget${onHeroMapClick ? ' lac-map-widget--clickable' : ''}`}
+        onClick={onHeroMapClick}
+        role={onHeroMapClick ? 'button' : undefined}
+        tabIndex={onHeroMapClick ? 0 : undefined}
+        onKeyDown={onHeroMapClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHeroMapClick(); } } : undefined}
+        aria-label={onHeroMapClick ? '点击放大地图' : undefined}
+      >
         <AggregatedMap
           app={app}
           repository={repository}
@@ -76,6 +89,7 @@ export default function RoadmapHeader({
           preferredProvider={data?.detail?.map_provider}
           useNumberedMarkers
         />
+        {onHeroMapClick && <span className="lac-map-widget-expand">↗ expand</span>}
       </div>
     </>
   );
