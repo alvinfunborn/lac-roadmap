@@ -43,10 +43,23 @@
   --heat-empty: rgba(237, 231, 218, 0.14); // in-range but no place
   --heat-bg:    rgba(237, 231, 218, 0.06);  // out-of-range
 
-  // Type
-  --serif: "Newsreader", "Source Serif 4", Georgia, serif;
-  --sans:  "Geist", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --mono:  "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+  // Type — Field Journal redesign asks for Newsreader / Geist / JetBrains
+  // Mono. Those are NOT bundled (no @font-face, no Google Fonts @import) to
+  // keep the plugin lightweight and offline-safe; the chains below fall
+  // through to whatever the host OS already ships, with a CJK tail for the
+  // mostly-Chinese trip notes. If you want the full redesign aesthetic, add
+  // a Google Fonts @import in your Obsidian custom CSS — these var names
+  // resolve to it automatically.
+  --serif: "Newsreader", "Source Serif 4", "Source Serif Pro", "Charter",
+           "Cambria", Georgia, "Times New Roman",
+           "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+  --sans:  "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+           Roboto, "Helvetica Neue", Arial,
+           "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+           "Noto Sans CJK SC", sans-serif;
+  --mono:  "JetBrains Mono", "IBM Plex Mono", "SF Mono", "Cascadia Code",
+           "Cascadia Mono", Consolas, "Liberation Mono", "Menlo",
+           ui-monospace, monospace;
 
   // Radii / shadows
   --r-4: 4px;
@@ -54,22 +67,18 @@
   --r-12: 12px;
   --shadow-card: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -12px rgba(0,0,0,0.5);
 
-  // Legacy CSS-var aliases used by CardCalendar (kept for back-compat)
-  --lac-done: var(--done);
-  --lac-todo: var(--plan);
 }
 
-// Legacy SCSS variable aliases. New rules SHOULD use `var(--…)` directly;
-// these aliases keep unmigrated rules compiling during the redesign rollout.
-// Phase F removes any that are no longer referenced.
-$lac-bg:      #0E1316;            // was #101820
-$lac-card:    #151B20;            // was #4b4b4b
+// Legacy SCSS variable aliases. New rules use `var(--…)` directly; these
+// aliases keep a handful of unmigrated rules (in _utilities / _map /
+// _drag-feedback) compiling. Aliases with zero references have been
+// pruned — only the still-referenced ones remain.
+$lac-card:    #151B20;
 $lac-done:    #B3995D;
 $lac-todo:    #D3BC8D;
-$lac-na:      #C77A4A;            // was #FF8200
-$lac-danger:  #B65454;            // was #aa0000
+$lac-na:      #C77A4A;
 $lac-primary: #D3BC8D;
-$lac-text:    #ECE4D4;            // was #fff
+$lac-text:    #ECE4D4;
 
 // spacing & radii
 $lac-radius-6:  6px;

@@ -1,5 +1,27 @@
-import { Place, RouteSegment } from '../../types/roadmap';
+import { Place, RouteSegment, Address } from '../../types/roadmap';
 import { isPlace } from '../../utils/typeGuards';
+
+/** Haversine 公式 — 大圆距离（米），输入十进制度。 */
+export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** Format a straight-line distance for the `+ transit` placeholder.
+ *  Returns `undefined` when either endpoint lacks coords so callers can
+ *  conditionally omit the trailing chip segment. */
+export function formatStraightLineDistance(a?: Address, b?: Address): string | undefined {
+  if (!a || !b) return undefined;
+  if (typeof a.latitude !== 'number' || typeof a.longitude !== 'number') return undefined;
+  if (typeof b.latitude !== 'number' || typeof b.longitude !== 'number') return undefined;
+  const m = haversineMeters(a.latitude, a.longitude, b.latitude, b.longitude);
+  return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m';
+}
 
 /** 与 roadmapset 卡片标题颜色逻辑一致的地点状态色 */
 export function getPlaceStatusColor(

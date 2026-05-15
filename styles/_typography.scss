@@ -40,25 +40,10 @@
 .lac-dot--done { background: var(--done); box-shadow: 0 0 0 2px rgba(179, 153, 93, 0.18); }
 .lac-dot--plan { background: var(--plan); box-shadow: 0 0 0 2px rgba(211, 188, 141, 0.22); }
 .lac-dot--wish { background: var(--wish); box-shadow: 0 0 0 2px rgba(199, 122, 74, 0.18); }
-// Legacy state-class aliases so existing helpers (getPlaceStatusColor returns
-// `lac-todo` / `lac-na`) keep working without churn. Phase F maps callers to
-// the new tokens and these aliases go away.
-.lac-dot--todo { @extend .lac-dot--plan; }
-.lac-dot--na   { @extend .lac-dot--wish; }
 
 // Hairlines
 .lac-hr           { height: 1px; background: var(--hairline);        border: 0; margin: 0; }
 .lac-hr--strong   { background: var(--hairline-strong); }
-
-// Card surface — supersedes the old .lac-card chrome. New components use
-// .lac-card2 directly; .lac-card itself is restyled in _card.scss to match.
-.lac-card2 {
-  background: var(--surface-1);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-12);
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
-}
 
 // Subtle striped placeholder for missing imagery (small map thumbs, etc.)
 .lac-placeholder {

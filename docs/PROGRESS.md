@@ -1,7 +1,7 @@
 # LaC.Roadmap 插件迭代进度
 
-生成日期：2026-04-15（Wave 1–4）→ 2026-05-10（Wave 5）
-基础版本：v1.0.0 → v1.1.0 → v1.2.0
+生成日期：2026-04-15（Wave 1–4）→ 2026-05-10（Wave 5）→ 2026-05-15（Wave 6–7）
+基础版本：v1.0.0 → v1.1.0 → v1.2.0 → v1.3.0 → v1.3.1
 
 ## Wave 1 — 架构与数据
 
@@ -64,6 +64,40 @@
 - **导出格式扩展**：`RoadmapExportService` 新增 `exportMarkdown`（H1/H2/列表 + 统计表格，可贴回 Obsidian）与 `exportGpx`（GPX 1.1 标准 wpt + trk/trkseg，GCJ-02 自动转 WGS84）；UI 加"复制 Markdown"和"下载 GPX"两个按钮
 - **polyline 着色 + 图例**：`AggregatedMap` 按 `travelMode` 分配颜色（步行绿/骑行青/摩托橙/驾车蓝/公交紫），左下浮层 legend 仅显示当前路线实际用到的方式；solid/dashed 视觉区分仍由 `styleForTravelMode` 决定
 
+## Wave 6 — Field Journal redesign 落地（v1.2.0 → v1.3.0）
+
+目标：把 `docs/design/` 里的 Field Journal 设计稿（typography-led / warm-ink palette / 单色金度热力图 / 真正纵向 timeline / 一行 mono 统计）真正落到代码层。
+
+- **Tokens 接入**：`styles/_variables.scss` 复刻 `docs/design/tokens.css`（warm-ink surfaces / parchment text / 三态色 / `--heat-1..5` / radii / shadows），并在 `:root` / `.lac-roadmap-root` / `.lac-roadmapset-root` 三层声明，避免 Obsidian 主题覆盖。
+- **Atoms 接入**（`styles/_typography.scss`）：`.lac-stage` / `.lac-mono` / `.lac-serif` / `.lac-eyebrow` / `.lac-dot--{done|plan|wish}`（带 ring shadow） / `.lac-hr` / `.lac-placeholder` / `.lac-stats-line`。
+- **统计：5 卡片 → 一行 mono**：`components/RoadmapStats.tsx` 重写为 `lac-stats-line`（数字 var(--text-1) + 单位 var(--text-4)）；trip list 用 `RoadmapSetStats`（status-tinted 计数）。
+- **热力图：彩虹 → 单色金度**：`components/CardCalendar.tsx` 改读 `var(--heat-1..5)` / `var(--heat-empty)` / `var(--heat-bg)`，5 阶 alpha 单色金度密度。
+- **Day Tabs：浏览器 tab → 三层 mono**：`styles/components/_tabs.scss` + `pages/roadmap/index.tsx` 改成 `DAY n` eyebrow + `MM·DD` mono 主体 + count 三层结构；hairline 底线 + 1.5px gold underline 标 active。Obsidian 主题 button chrome 全 reset。
+- **Timeline：列表 → spine + 编号圆**：`styles/pages/_roadmap-page.scss` 用 CSS counters + `::before` pseudo-element 渲染 spine + 编号 bullet（19×19 圆，hairline border，mono 数字），不破坏 DOM 结构 / Sortable.js 选择器。`lac-card-list--timeline` 修饰符开关。
+- **RouteBadge / `+ transit` chip**：`components/RouteBadge.tsx` 改成 mono pill（`walk · 4.8 km · 18 min`），travel mode 短标签 `walk/bike/moto/car/train`；`+ transit` dashed 占位用 haversine 直线距离。
+- **RoadmapHeader 重做**：back btn (24×24 hairline square + inline SVG chevron) + `trip` eyebrow + status-tinted serif 24px title + mono date range + italic serif desc + stats line + hero `AggregatedMap`，严格按 `RoadmapArtboard` 顺序。
+- **PlaceCard 重做**（`pages/roadmap/components/PlaceCard.tsx`）：dayLabel eyebrow + `.lac-dot--*` 状态点 + serif title + mono time + serif italic desc + 56×56 圆角 thumb（替换 100×100 方块），加 ink-tone vignette + 状态色 marker + count chip 拐角悬挂。
+- **Roadmapset 对齐 RoadmapSetArtboard**：`pages/roadmapset/index.tsx` 接入 `lac-roadmapset-root` + `LaC · Roadmap` eyebrow + `行程` serif 标题 + `RoadmapSetStats` + hero `AggregatedMap` + `未安排 · wishlist` / `已规划 · planned` section eyebrows + `+ new trip` dashed mono 按钮（替换 floating round +）。
+- **Modals Field Journal 化**：`PlaceEditModal` / `RoadmapEditModal` 加 `lac-confirm-eyebrow` + `lac-confirm-title-serif` + `lac-place-section` 字段栈（eyebrow 标 + serif/mono 控件 + 红色 delete / hairline cancel / plan-gold save 三按钮）。新增 `lac-trip-*` 修饰符（路线 modal 特有：when 单行 date→date / where 双 endpoint / provider dropdown）。
+- **设计稿沉淀**：`docs/design/`（Field Journal 设计哲学说明 `chat.md` + 4 artboards 的 `artboards.jsx` + 自研 `design-canvas.jsx` 画布 + `tokens.css` 设计变量 + `Roadmap Redesign.html` 外壳 + 40+ 张迭代截图）。
+
+## Wave 7 — 收尾重构（v1.3.0 → v1.3.1）
+
+目标：解决 Wave 6 遗留的 4 项 GAP — 字体未接入、`index.tsx` 1117 行未拆、Export UI 缺失、CSS legacy 残留。约束：保持 Obsidian 插件轻量（无 CDN、无字体打包、无新依赖）。
+
+- **字体：fallback chain 替代 CDN**：`_variables.scss` 的 `--serif/--sans/--mono` 扩到系统已有字型（Source Serif/Cambria/Georgia/CJK serif；Inter/Segoe UI/PingFang；SF Mono/Cascadia/Consolas）。Newsreader/Geist/JetBrains Mono 仍在链首，用户可在 Obsidian 自定义 CSS 里加 Google Fonts `@import` 自动接入；插件本体不打包字体、不发起网络请求。
+- **`pages/roadmap/index.tsx` 1117 → 379 行**（−66%）：按 artboard 视觉 section 拆出 4 个组件 + 1 个 hook：
+  - `components/RoadmapHeader.tsx`（83）：back btn / eyebrow / title row / desc / stats / hero map（Fragment 输出，外层 wrapper 留在 index.tsx 与 DayTabsStrip 同 box）
+  - `components/DayTabsStrip.tsx`（146）：三层 mono day tabs + 长按拖拽排序 + drop targets + `+ day`（长按 state 收回组件内）
+  - `components/Timeline.tsx`（166）：spine + Place/Route 交错 + `+ transit` 占位；trip-wide place list 与 dayLabel 计算就近放置
+  - `components/RoadmapActions.tsx`（62）：`+ add place` / `+ add trip` dashed 按钮 + `↓ export` 下拉菜单
+  - `hooks/usePlaceMutations.ts`（394）：addPlaceFromList / editPlace / deletePlace / onSavePlace / autoInsertRoutesAroundNewPlace / onCreateSubRoadmap 六个 handler 集中（含 PlaceEditModal 与 sub-roadmap modal 的 visible/initial state）
+  - `helpers.ts` 加入 `haversineMeters` / `formatStraightLineDistance`（Timeline 用）
+  - 新 `index.tsx`：state（5 个）+ 加载 effect + 4 个 hook 编排 + addDayOnly / openMetaEditor / saveMetaEditor / goBack / handlePlaceClick + 6 段 JSX。
+- **Export UI 接入**：`RoadmapActions` 新增 `↓ export` 按钮 + 下拉菜单，接 4 个已有 export 函数（plain / markdown / .ics / .gpx）；`_roadmap-page.scss` 加 `.lac-roadmap-export` / `.lac-btn--export` / `.lac-roadmap-export-menu` / `.lac-roadmap-export-item` 样式（向上弹、warm-ink surface、hairline border、mono uppercase items）。
+- **CSS legacy 清理**：`.lac-card2` 死代码删除（与 `.lac-card` chrome 完全重复且 0 引用）；`.lac-dot--todo` / `.lac-dot--na` 别名删除（PlaceCard 已直接映射到 `--plan` / `--wish`）；SCSS `$lac-bg` / `$lac-danger` 删除（0 引用）；`--lac-done` / `--lac-todo` CSS-var 别名删除（CardCalendar 已直接读 `--heat-*`）。
+- **构建 / 测试**：`npm run build` 通过（tsc + esbuild + SCSS 0 deprecation）；`npm test` 137 / 137 通过。
+
 ## 设计哲学合规
 
 1. 数据即文件（TOML + Wikilink）：✅ 所有 `vault.create` / `vault.modify` 入口（`RoadmapRepository` 的 createRoadmapFile / savePlaceFile / updateRoadmapMeta / updatePlaceGeneric / updatePlaceScheduleInRoadmap / updateRoadmapItems / updateRootFile，`main.ts` 的初始化示例）全部通过 `stringifyToml` + 手写 `[[wikilink]]` 行写入，未引入其它格式。
@@ -74,17 +108,19 @@
 
 ## 关键指标
 
-- `pages/roadmap/index.tsx`: 1102 → 746 行（Wave 1）→ Wave 5 微增（+ Markdown/GPX 导出钩子）
-- `repositories/RoadmapRepository.ts`: 466 行（新建，Wave 1–4）
-- 新增组件：`RouteBadge`、`RoadmapStats`、`PlaceStaticMap`、`StaticMap`、`RouteSegmentEditModal`、`RoadmapEditModal`、`PlaceCard` 等 7+
-- 新增 hooks：`useRoadmapGroups`、`usePlaceDragDrop`、`useTabs` 共 3 个
-- 新增 services：`RouteCalculationService`、`RoadmapExportService`（plain text / ICS / Markdown / GPX）
+- `pages/roadmap/index.tsx`: 1102 → 746（Wave 1）→ ~1117（Wave 5–6 redesign 累积）→ **379（Wave 7 拆分）**
+- `repositories/RoadmapRepository.ts`: 466 → 525 行（Wave 1–6）
+- 组件总数：`RouteBadge`、`RoadmapStats`/`RoadmapSetStats`、`PlaceStaticMap`、`StaticMap`、`RouteSegmentEditModal`、`RoadmapEditModal`、`PlaceCard`、**`RoadmapHeader`、`DayTabsStrip`、`Timeline`、`RoadmapActions`**（Wave 7 新加 4）
+- Hooks 总数：`useRoadmapGroups`、`usePlaceDragDrop`、`useTabs`、**`usePlaceMutations`**（Wave 7 新加 1）共 4
+- Services：`RouteCalculationService`、`RoadmapExportService`（plain / ICS / Markdown / GPX）
 - Map provider：2 个（Google / 高德）+ 通用接口 `IMapProvider`
-- **`as any`：35 → 0**（Wave 5）
+- **`as any`：35 → 0**（Wave 5；Wave 7 仍 0 — 4 处 Obsidian leaf API workaround 不计）
 - **静默 `catch (_)`：12 → 0**（Wave 5）
 - **SCSS Dart Sass 3 预警：消除**（Wave 5）
+- **死代码清理（Wave 7）**：`.lac-card2` / `.lac-dot--todo` / `.lac-dot--na` / `$lac-bg` / `$lac-danger` / `--lac-done` / `--lac-todo` 已删
 - CSS 前缀：统一为 `lac-`，`lf-` / `lifeflow-` 0 处
-- 最终 `npm run build`：tsc 无错、esbuild 无错、SCSS 编译无 deprecation 预警
+- 字体策略（Wave 7）：fallback chain 接系统已有字型（Newsreader → Cambria → Georgia → CJK serif；Geist → Inter → Segoe UI；JetBrains Mono → SF Mono → Cascadia → Consolas），**不打包字体、不发起网络请求**
+- 测试：137 / 137 通过；`npm run build` tsc 无错、esbuild 无错、SCSS 0 deprecation
 
 ## 遗留 TODO
 
