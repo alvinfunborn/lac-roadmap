@@ -1,227 +1,69 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CardCalendar, { buildDailyCounts } from '../../components/CardCalendar';
-import { App, TFile } from 'obsidian';
+import StaticMap from '../../components/StaticMap';
+import { App, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import { RoadmapRepository } from '../../repositories/RoadmapRepository';
-import { Roadmap, Place } from '../../types/roadmap';
-import { MapLocation } from '../../types/map';
-import { t } from '../../i18n';
+import { Roadmap } from '../../types/roadmap';
 import MapSelector from '../../components/map/MapSelector';
 import AggregatedMap from '../../components/map/AggregatedMap';
+import ConfirmModal from '../../components/modals/ConfirmModal';
+import RoadmapEditModal, { RoadmapEditPayload } from '../../components/modals/RoadmapEditModal';
+import { RoadmapSetStats, computeRoadmapStats } from '../../components/RoadmapStats';
+import { startOfDay, formatYMD, parseDateOrNull } from '../../utils/date';
+
+// 与 pages/roadmap 一致：用 Sortable.js 接管未安排区卡片的排序，
+// 这样能复用 ghost / chosen / drag 样式，提供释放预览与平滑动画。
+type SortableInstance = { destroy: () => void };
+type SortableFactory = { create: (el: HTMLElement, opts?: object) => SortableInstance };
+const SortableLib = require('sortablejs') as SortableFactory & { default?: SortableFactory };
+const Sortable: SortableFactory = SortableLib.default ?? SortableLib;
 
 interface Props {
   app: App;
   repository: RoadmapRepository;
   settings: any;
+  /** The WorkspaceLeaf hosting this view — passed in by RoadmapView so
+   *  navigation calls operate on the *exact* leaf showing this page,
+   *  rather than going through `app.workspace.getLeaf()` which can
+   *  silently spawn a new tab if the active leaf isn't what we expect. */
+  leaf?: WorkspaceLeaf;
 }
 
-// Static Map Component using Google Maps Static API
-function StaticMap({ roadmap, settings }: { roadmap: Roadmap; settings: any }) {
-  const [mapUrl, setMapUrl] = useState<string>('');
-  const [hasError, setHasError] = useState(false);
-  const [hasCoordinates, setHasCoordinates] = useState(false);
-  const imageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+// StaticMap 组件、坐标转换工具、日历日期辅助函数已分别抽到
+// components/StaticMap.tsx 与 utils/date.ts，保持本文件专注于页面组合。
 
-  useEffect(() => {
-    const generateMapUrl = () => {
-      console.log(`[StaticMap] Generating map for roadmap: ${roadmap.name}`);
-      
-      // Collect all locations from roadmap and its linked places
-      const allLocations: MapLocation[] = [];
-      
-      // Add roadmap's own location if it has coordinates
-      if (roadmap.detail?.address) {
-        const roadmapLoc = roadmap.detail.address as MapLocation;
-        console.log(`[StaticMap] Roadmap address:`, roadmapLoc);
-        if (roadmapLoc && typeof roadmapLoc.longitude === 'number' && typeof roadmapLoc.latitude === 'number') {
-          allLocations.push(roadmapLoc);
-          console.log(`[StaticMap] Added roadmap location: ${roadmapLoc.latitude}, ${roadmapLoc.longitude}`);
-        }
-      }
-      
-      // Add all linked places locations
-      const places = roadmap.items.filter(item => 'name' in item) as Place[];
-      console.log(`[StaticMap] Found ${places.length} places in roadmap`);
-      
-      for (const place of places) {
-        const loc = place.detail?.address as MapLocation | undefined;
-        console.log(`[StaticMap] Place "${place.name}" address:`, loc);
-        if (loc && typeof loc.longitude === 'number' && typeof loc.latitude === 'number') {
-          allLocations.push(loc);
-          console.log(`[StaticMap] Added place location: ${loc.latitude}, ${loc.longitude}`);
-        }
-      }
-
-      console.log(`[StaticMap] Total locations found: ${allLocations.length}`);
-      console.log(`[StaticMap] Google Maps API Key available: ${!!settings?.googleMapsApiKey}`);
-
-      if (allLocations.length === 0) {
-        console.log(`[StaticMap] No coordinates found for roadmap: ${roadmap.name}`);
-        setHasCoordinates(false);
-        setHasError(true);
-        return;
-      }
-
-      if (!settings?.googleMapsApiKey) {
-        console.log(`[StaticMap] No Google Maps API Key available`);
-        setHasCoordinates(true);
-        setHasError(true);
-        return;
-      }
-
-      try {
-        // Generate Google Maps Static API URL
-        const baseUrl = 'https://maps.googleapis.com/maps/api/staticmap';
-        
-        // Calculate center point from all locations
-        const avgLat = allLocations.reduce((sum, loc) => sum + (loc.latitude || 0), 0) / allLocations.length;
-        const avgLng = allLocations.reduce((sum, loc) => sum + (loc.longitude || 0), 0) / allLocations.length;
-        
-        console.log(`[StaticMap] Calculated center: ${avgLat}, ${avgLng}`);
-        
-        // Create tiny red dot markers for all locations (no labels/numbers)
-        const markers = allLocations.map((loc) => {
-          return `size:tiny|color:0xff3b30|${loc.latitude},${loc.longitude}`;
-        }).join('&markers=');
-        
-        const params = new URLSearchParams({
-          center: `${avgLat},${avgLng}`,
-          zoom: '10',
-          size: '100x100',
-          maptype: 'roadmap',  // 卡片地图使用 roadmap
-          markers: markers,
-          key: settings.googleMapsApiKey
-        });
-
-        const url = `${baseUrl}?${params.toString()}`;
-        console.log(`[StaticMap] Generated map URL: ${url}`);
-        
-        setMapUrl(url);
-        setHasError(false);
-        setHasCoordinates(true);
-      } catch (error) {
-        console.error(`[StaticMap] Failed to generate static map URL for ${roadmap.name}:`, error);
-        setHasError(true);
-        setHasCoordinates(true);
-      }
-    };
-
-    generateMapUrl();
-  }, [roadmap, settings]);
-
-  // Image loading timeout effect - must be before any conditional returns
-  useEffect(() => {
-    if (!mapUrl || hasError || !hasCoordinates) return;
-    
-    // Set timeout for image loading (10 seconds)
-    imageTimeoutRef.current = setTimeout(() => {
-      console.error(`[StaticMap] Image load timeout for ${roadmap.name}`);
-      setHasError(true);
-    }, 10000);
-    
-    return () => {
-      if (imageTimeoutRef.current) {
-        clearTimeout(imageTimeoutRef.current);
-        imageTimeoutRef.current = null;
-      }
-    };
-  }, [mapUrl, hasError, hasCoordinates, roadmap.name]);
-
-  // Don't render map container if no coordinates
-  if (!hasCoordinates) {
-    console.log(`[StaticMap] Not rendering map for ${roadmap.name} - no coordinates`);
-    return null;
-  }
-
-  if (hasError || !mapUrl) {
-    console.log(`[StaticMap] Rendering placeholder for ${roadmap.name} - error or no URL`);
-    return (
-      <div className="lac-card-map">
-        <div className="lac-card-map-placeholder">
-          <div className="lac-card-map-placeholder-text">📍</div>
-        </div>
-      </div>
-    );
-  }
-
-  console.log(`[StaticMap] Rendering map for ${roadmap.name}`);
-  
-  return (
-    <div className="lac-card-map">
-      <img 
-        src={mapUrl} 
-        alt={`Map for ${roadmap.name}`}
-        className="lac-card-map-image"
-        onError={() => {
-          if (imageTimeoutRef.current) {
-            clearTimeout(imageTimeoutRef.current);
-            imageTimeoutRef.current = null;
-          }
-          console.error(`[StaticMap] Image load error for ${roadmap.name}`);
-          setHasError(true);
-        }}
-        onLoad={() => {
-          if (imageTimeoutRef.current) {
-            clearTimeout(imageTimeoutRef.current);
-            imageTimeoutRef.current = null;
-          }
-          console.log(`[StaticMap] Image loaded successfully for ${roadmap.name}`);
-        }}
-      />
-    </div>
-  );
-}
-
-// ---------------- Calendar Heatmap helpers kept for global-range computation ----------------
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function startOfWeekMonday(d: Date): Date {
-  const x = startOfDay(d);
-  const day = x.getDay(); // 0..6 (Sun..Sat)
-  // shift so that Monday is 0: Mon(1)->0, ..., Sun(0)->6
-  const offset = (day + 6) % 7;
-  x.setDate(x.getDate() - offset);
-  return x;
-}
-
-function endOfWeekSunday(d: Date): Date { const s = startOfWeekMonday(d); s.setDate(s.getDate() + 6); return s; }
-
-function formatYMD(d: Date): string {
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, '0');
-  const da = `${d.getDate()}`.padStart(2, '0');
-  return `${y}-${m}-${da}`;
-}
-
-function parseDateOrNull(s?: string): Date | null {
-  if (!s) return null;
-  let raw = s.trim();
-  // Accept "YYYY-MM-DD HH:mm:ss" by converting to ISO-like string
-  if (raw.length > 10 && raw.indexOf('T') === -1 && raw.indexOf(' ') > 0) raw = raw.replace(' ', 'T');
-  let t = new Date(raw);
-  if (!isNaN(t.getTime())) return t;
-  // Try strict date-only
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})$/);
-  if (m) {
-    t = new Date(`${m[1]}T00:00:00`);
-    if (!isNaN(t.getTime())) return t;
-  }
-  console.debug('[CardCalendar] parseDate failed:', s);
-  return null;
+// 2.1 卡片排序：未安排在上、已安排在下；未安排区文本倒序；已安排区时间倒序、同时间文本倒序
+function sortRoadmaps(loaded: Roadmap[], ids: string[]): Roadmap[] {
+  const orderInMd: Record<string, number> = {};
+  ids.forEach((id, i) => { orderInMd[id] = i; });
+  const isUnplanned = (r: Roadmap) => !r.detail?.start_time && !r.detail?.end_time;
+  return loaded.slice().sort((a, b) => {
+    const ua = isUnplanned(a);
+    const ub = isUnplanned(b);
+    if (ua !== ub) return ua ? -1 : 1;
+    if (ua) return (orderInMd[b.id] ?? 0) - (orderInMd[a.id] ?? 0); // 未安排：文本倒序
+    const ta = parseDateOrNull(a.detail?.start_time || a.detail?.end_time)?.getTime() ?? 0;
+    const tb = parseDateOrNull(b.detail?.start_time || b.detail?.end_time)?.getTime() ?? 0;
+    if (ta !== tb) return tb - ta; // 已安排：时间倒序
+    return (orderInMd[b.id] ?? 0) - (orderInMd[a.id] ?? 0); // 同时间：文本倒序
+  });
 }
 
 // per-roadmap counts have been moved to component and re-exported for reuse above
 
 // NOTE: CardCalendar moved out.
 
-export default function RoadmapSetPage({ app, repository, settings }: Props) {
+export default function RoadmapSetPage({ app, repository, settings, leaf }: Props) {
   const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
   const [mapVisible, setMapVisible] = useState(false);
   const [globalCounts, setGlobalCounts] = useState<Record<string, number>>({});
   const [globalRangeDays, setGlobalRangeDays] = useState<Record<string, true>>({});
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; roadmap: Roadmap } | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardListRef = useRef<HTMLDivElement | null>(null);
+  // 防止 Sortable 拖拽结束时的 pointerup 触发卡片 onClick → 误打开 roadmap
+  const didDragRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -233,7 +75,8 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
         }
         return null;
       });
-      const loadedRoadmaps = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
+      const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
+      const loadedRoadmaps = sortRoadmaps(loaded, ids);
       setRoadmaps(loadedRoadmaps);
       // build global counts across all roadmaps places
       const merged: Record<string, number> = {};
@@ -258,12 +101,14 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
     })();
   }, [repository, app]);
 
-  const handleAdd = async () => {
-    const name = prompt('新路线名称');
-    if (!name) return;
+  const handleAdd = () => {
+    setEditModalVisible(true);
+  };
+
+  const onConfirmCreate = async (payload: RoadmapEditPayload) => {
     const folder = (repository.getRootPath().split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
-    const fp = await repository.createRoadmapFile(folder, name, { description: '' });
-    await repository.addRoadmapToSet(name);
+    await repository.createRoadmapFile(folder, payload.name, payload.detail);
+    await repository.addRoadmapToSet(payload.name);
     const ids = await repository.loadRoadmapSet();
     const roadmapPromises = ids.map(async (id) => {
       const dest = app.metadataCache.getFirstLinkpathDest(id, repository.getRootPath());
@@ -272,60 +117,229 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
       }
       return null;
     });
-    const loadedRoadmaps = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
-    setRoadmaps(loadedRoadmaps);
+    const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
+    setRoadmaps(sortRoadmaps(loaded, ids));
+    setEditModalVisible(false);
   };
 
   const openRoadmap = async (roadmap: Roadmap) => {
     try {
       const dest = app.metadataCache.getFirstLinkpathDest(roadmap.id, repository.getRootPath());
       if (dest && dest instanceof TFile) {
-        const leaf = app.workspace.getLeaf('tab');
-        await leaf.setViewState({ type: 'lac-roadmap-view', state: { filePath: dest.path }, active: true });
-        app.workspace.revealLeaf(leaf);
+        // Navigate IN-PLACE on the leaf hosting THIS roadmapset view.
+        // `app.workspace.getLeaf(false)` was unreliable here — depending
+        // on focus state Obsidian sometimes returned a different leaf
+        // (or spawned a fresh one), giving the trip page an empty
+        // history stack and breaking the back button. Using the leaf
+        // passed in from RoadmapView removes that ambiguity entirely.
+        const target = leaf || app.workspace.getLeaf(false);
+        await target.setViewState({ type: 'lac-roadmap-view', state: { filePath: dest.path }, active: true });
+        app.workspace.revealLeaf(target);
       }
-    } catch (_) {}
+    } catch (err) { console.warn('[RoadmapSetPage] openRoadmap failed', err); }
   };
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest?.('.lac-context-menu')) close();
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [contextMenu]);
+
+  const handleDeleteRoadmap = async (roadmap: Roadmap) => {
+    setContextMenu(null);
+    const modal = new ConfirmModal(`从集合中移除「${roadmap.name}」？`, '删除', '取消', true);
+    const ok = await modal.open();
+    if (!ok) return;
+    const ids = await repository.loadRoadmapSet();
+    const newIds = ids.filter(id => id !== roadmap.id);
+    await repository.updateRootFile(newIds);
+    const roadmapPromises = newIds.map(async (id) => {
+      const dest = app.metadataCache.getFirstLinkpathDest(id, repository.getRootPath());
+      if (dest && dest instanceof TFile) return await repository.loadRoadmap(dest.path);
+      return null;
+    });
+    const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
+    setRoadmaps(sortRoadmaps(loaded, newIds));
+  };
+
+  const handleDeleteRoadmapPermanently = async (roadmap: Roadmap) => {
+    setContextMenu(null);
+    const confirm1 = await new ConfirmModal(
+      `彻底删除「${roadmap.name}」并将其 .md 文件移入回收站？`,
+      '继续',
+      '取消',
+      true,
+    ).open();
+    if (!confirm1) return;
+    const confirm2 = await new ConfirmModal(
+      `此操作不可撤销。文件中的地点引用本身（[[...]]）保留为孤立链接。再次确认彻底删除「${roadmap.name}」？`,
+      '彻底删除',
+      '取消',
+      true,
+    ).open();
+    if (!confirm2) return;
+
+    const dest = app.metadataCache.getFirstLinkpathDest(roadmap.id, repository.getRootPath());
+    if (!dest || !(dest instanceof TFile)) {
+      new Notice('未找到对应的 .md 文件');
+      return;
+    }
+    try {
+      await app.fileManager.trashFile(dest);
+    } catch (e) {
+      console.warn('[RoadmapSetPage] trashFile failed', e);
+      new Notice('删除文件失败');
+      return;
+    }
+    // 同步移除根集合中的引用
+    const ids = await repository.loadRoadmapSet();
+    const newIds = ids.filter(id => id !== roadmap.id);
+    await repository.updateRootFile(newIds);
+    const roadmapPromises = newIds.map(async (id) => {
+      const d = app.metadataCache.getFirstLinkpathDest(id, repository.getRootPath());
+      if (d && d instanceof TFile) return await repository.loadRoadmap(d.path);
+      return null;
+    });
+    const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
+    setRoadmaps(sortRoadmaps(loaded, newIds));
+    new Notice(`已彻底删除「${roadmap.name}」`);
+  };
+
+  const handleCopyRoadmap = async (roadmap: Roadmap) => {
+    setContextMenu(null);
+    const newName = roadmap.name + ' 副本';
+    const folder = (repository.getRootPath().split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
+    const newFilePath = await repository.createRoadmapFile(folder, newName, roadmap.detail);
+    await repository.updateRoadmapItems(newFilePath, newName, roadmap.detail || {}, roadmap.items);
+    await repository.addRoadmapToSet(newName);
+    const ids = await repository.loadRoadmapSet();
+    const roadmapPromises = ids.map(async (id) => {
+      const dest = app.metadataCache.getFirstLinkpathDest(id, repository.getRootPath());
+      if (dest && dest instanceof TFile) return await repository.loadRoadmap(dest.path);
+      return null;
+    });
+    const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
+    setRoadmaps(sortRoadmaps(loaded, ids));
+    const dest = app.metadataCache.getFirstLinkpathDest(newName, repository.getRootPath());
+    if (dest && dest instanceof TFile) {
+      // Same rationale as openRoadmap — pin to this view's actual leaf.
+      const target = leaf || app.workspace.getLeaf(false);
+      await target.setViewState({ type: 'lac-roadmap-view', state: { filePath: dest.path }, active: true });
+      app.workspace.revealLeaf(target);
+    }
+  };
+
+  const showContextMenu = (e: React.MouseEvent, roadmap: Roadmap) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, roadmap });
+  };
+
+  const onCardPointerDown = (roadmap: Roadmap) => {
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      setContextMenu({ x: window.innerWidth / 2 - 60, y: window.innerHeight / 2 - 40, roadmap });
+    }, 500);
+  };
+
+  const onCardPointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // 2.2 拖拽：仅未安排可拖拽，松手后写回根文件 [[...]] 顺序。
+  // 用 Sortable.js（与 pages/roadmap 一致），自带释放预览（ghost）+ 动画。
+  const isUnplanned = (r: Roadmap) => !r.detail?.start_time && !r.detail?.end_time;
+  const unarrangedCount = roadmaps.filter(isUnplanned).length;
+
+  const applyReorder = useCallback(async (from: number, to: number) => {
+    if (from === to) return;
+    if (from >= unarrangedCount || to >= unarrangedCount) return;
+    const unarranged = roadmaps.slice(0, unarrangedCount);
+    const arranged = roadmaps.slice(unarrangedCount);
+    const [moved] = unarranged.splice(from, 1);
+    unarranged.splice(to, 0, moved);
+    const ids = await repository.loadRoadmapSet();
+    const arrangedIds = ids.filter(id => {
+      const r = roadmaps.find(rm => rm.id === id);
+      return r && !isUnplanned(r);
+    });
+    // 未安排区在 UI 中按 md 顺序倒序展示，所以写回时再倒序回去。
+    const newUnarrangedForRoot = unarranged.map(r => r.id).reverse();
+    const newIds = [...newUnarrangedForRoot, ...arrangedIds];
+    await repository.updateRootFile(newIds);
+    setRoadmaps([...unarranged, ...arranged]);
+  }, [roadmaps, unarrangedCount, repository]);
+
+  // ref 让 Sortable 始终调到最新闭包，避免每次 roadmaps 变化都重建 Sortable 实例。
+  const applyReorderRef = useRef<(from: number, to: number) => Promise<void>>(async () => {});
+  applyReorderRef.current = applyReorder;
+
+  useEffect(() => {
+    const el = cardListRef.current;
+    if (!el) return;
+    const so = Sortable.create(el, {
+      animation: 150,
+      draggable: '.lac-card--compact',
+      ghostClass: 'lac-sortable-ghost',
+      chosenClass: 'lac-sortable-chosen',
+      dragClass: 'lac-sortable-drag',
+      // 只允许放在另一张 compact 卡片旁——eyebrow / planned 卡片不是 compact，
+      // 自动拒绝为放置目标，防止越过未安排区边界。
+      onMove: (evt: { related: HTMLElement }) =>
+        evt.related instanceof HTMLElement && evt.related.classList.contains('lac-card--compact'),
+      onEnd: (evt: {
+        item: HTMLElement;
+        oldIndex?: number;
+        newIndex?: number;
+        oldDraggableIndex?: number;
+        newDraggableIndex?: number;
+        from: HTMLElement;
+      }) => {
+        const { item, oldIndex, newIndex, oldDraggableIndex, newDraggableIndex, from: fromEl } = evt;
+        if (oldIndex == null || newIndex == null) return;
+        if (oldDraggableIndex == null || newDraggableIndex == null) return;
+        if (oldIndex === newIndex) return;
+        // 先把 Sortable 物理移动的节点放回原位，再由 React 用新数据重排——
+        // 否则 React 的虚拟 DOM diff 会叠加在 Sortable 已应用的移动上（与 pages/roadmap 同款问题）。
+        const children = Array.from(fromEl.children) as HTMLElement[];
+        const refIdx = newIndex > oldIndex ? oldIndex : oldIndex + 1;
+        const refNode = children[refIdx];
+        if (refNode && refNode !== item) {
+          fromEl.insertBefore(item, refNode);
+        } else {
+          fromEl.appendChild(item);
+        }
+        didDragRef.current = true;
+        applyReorderRef.current(oldDraggableIndex, newDraggableIndex);
+      },
+    } as object);
+    return () => so.destroy();
+  }, []);
+
   // Helper functions for card display
+  // Date format matches the design — `YYYY·MM·DD → MM·DD` with mono dots so
+  // it sits cleanly next to the place / km tokens on the same line.
   const getDateRange = (roadmap: Roadmap): string => {
-    console.log(`[getDateRange] Processing roadmap: ${roadmap.name}`);
-    console.log(`[getDateRange] Roadmap detail:`, roadmap.detail);
-    
     const startTime = roadmap.detail?.start_time;
     const endTime = roadmap.detail?.end_time;
-    
-    console.log(`[getDateRange] Start time: ${startTime}, End time: ${endTime}`);
-    
-    if (!startTime) {
-      console.log(`[getDateRange] No start time found for ${roadmap.name}`);
-      return '';
-    }
-    
+    if (!startTime) return '';
     try {
       const startDate = new Date(startTime);
-      const formatDate = (date: Date) => {
-        return date.toISOString().split('T')[0]; // yyyy-MM-dd format
-      };
-      
-      if (!endTime) {
-        const result = formatDate(startDate);
-        console.log(`[getDateRange] Single date result for ${roadmap.name}: ${result}`);
-        return result;
-      }
-      
+      const ymd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '·');
+      const md = (d: Date) => d.toISOString().slice(5, 10).replace('-', '·');
+      if (!endTime) return ymd(startDate);
       const endDate = new Date(endTime);
-      if (startDate.getTime() === endDate.getTime()) {
-        const result = formatDate(startDate);
-        console.log(`[getDateRange] Same date result for ${roadmap.name}: ${result}`);
-        return result;
-      }
-      
-      const result = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
-      console.log(`[getDateRange] Date range result for ${roadmap.name}: ${result}`);
-      return result;
-    } catch (error) {
-      console.error(`[getDateRange] Error processing dates for ${roadmap.name}:`, error);
+      if (startDate.toDateString() === endDate.toDateString()) return ymd(startDate);
+      return `${ymd(startDate)} → ${md(endDate)}`;
+    } catch {
       return '';
     }
   };
@@ -333,22 +347,22 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
   const getStatusColor = (roadmap: Roadmap): string => {
     const startTime = roadmap.detail?.start_time;
     const endTime = roadmap.detail?.end_time;
-    
+
     if (!startTime && !endTime) return 'lac-na'; // No time planned
-    
+
     const now = new Date();
-    
+
     try {
       if (startTime) {
         const startDate = new Date(startTime);
         if (startDate <= now) return 'lac-done'; // Started
       }
-      
+
       if (endTime) {
         const endDate = new Date(endTime);
         if (endDate <= now) return 'lac-done'; // Ended
       }
-      
+
       return 'lac-todo'; // Not started yet
     } catch {
       return 'lac-na';
@@ -357,56 +371,116 @@ export default function RoadmapSetPage({ app, repository, settings }: Props) {
 
   return (
     <div className="lac-roadmapset-root">
-      {/* 顶部地图固定不滚动 */}
+      {/* 顶部固定区：先 eyebrow + h1 + count，再 stats，再地图（严格按 design 顺序）*/}
       <div className="lac-roadmapset-header">
-        <div className="lac-map-widget lac-mb-12">
+        <div className="lac-eyebrow lac-roadmapset-eyebrow">LaC · Roadmap</div>
+        <div className="lac-roadmapset-title-row">
+          <h1 className="lac-serif lac-roadmapset-title">行程</h1>
+          <span className="lac-mono lac-roadmapset-count">{roadmaps.length} trips</span>
+        </div>
+        <div className="lac-roadmapset-stats">
+          <RoadmapSetStats roadmaps={roadmaps} />
+        </div>
+        <div className="lac-map-widget">
           <AggregatedMap app={app} repository={repository} settings={settings} />
         </div>
       </div>
 
       {/* 下方卡片列表（独立滚动区域）*/}
       <div className="lac-roadmapset-list-wrapper">
-        <div className="lac-card-list">
-          {roadmaps.map(roadmap => {
-            console.log(`[Card] Rendering card for roadmap: ${roadmap.name}`);
-            console.log(`[Card] Roadmap data:`, roadmap);
-            
+        <div className="lac-card-list" ref={cardListRef}>
+          {roadmaps.map((roadmap, idx) => {
             const description = roadmap.detail?.description || '';
             const dateRange = getDateRange(roadmap);
             const statusColor = getStatusColor(roadmap);
-            
-            console.log(`[Card] Description: "${description}"`);
-            console.log(`[Card] Date range: "${dateRange}"`);
-            console.log(`[Card] Status color: "${statusColor}"`);
-            
+            const canDrag = isUnplanned(roadmap);
+            // Per-card stat trail — places count + total distance, mirroring
+            // the design's `range · 4 places · 81.3 km` line. Distance is
+            // hidden when zero (e.g. cards with no route segments).
+            const cardStats = computeRoadmapStats(roadmap);
+            const hasDistance = cardStats.distanceText && cardStats.distanceText !== '0 m';
+            // Match PlaceCard's mapping from legacy state class to .lac-dot--* kind.
+            const dotCls = statusColor === 'lac-done' ? 'lac-dot--done'
+              : statusColor === 'lac-todo' ? 'lac-dot--plan'
+              : 'lac-dot--wish';
+            // Section eyebrows — at the start of each group. Sortable.js
+            // selectors ignore non-card siblings, so injecting these rows
+            // doesn't disturb drag-drop.
+            const showWishlist = idx === 0 && unarrangedCount > 0;
+            const showPlanned  = idx === unarrangedCount && unarrangedCount < roadmaps.length;
+
             return (
+              <React.Fragment key={roadmap.id}>
+                {showWishlist && <div className="lac-list-eyebrow lac-eyebrow">未安排 · wishlist</div>}
+                {showPlanned  && <div className="lac-list-eyebrow lac-eyebrow">已规划 · planned</div>}
               <div
-                key={roadmap.id}
-                className="lac-card lac-cursor-pointer"
-                onClick={() => openRoadmap(roadmap)}
+                className={`lac-card lac-cursor-pointer${canDrag ? ' lac-card--compact' : ''}`}
+                onClick={() => {
+                  // 拖拽结束的 pointerup 会触发 click——这里吞掉一次，避免误打开 roadmap。
+                  if (didDragRef.current) { didDragRef.current = false; return; }
+                  openRoadmap(roadmap);
+                }}
+                onContextMenu={(e) => showContextMenu(e, roadmap)}
+                onPointerDown={() => onCardPointerDown(roadmap)}
+                onPointerUp={onCardPointerUp}
+                onPointerCancel={onCardPointerUp}
+                onPointerLeave={onCardPointerUp}
               >
-                <div className="lac-card-content">
-                  <div className="lac-card-text">
-                    <div className="lac-card-text-content">
-                      <div className="lac-card-title">
-                        <div className={`lac-title ${statusColor}`}>{roadmap.name}</div>
-                        <div className="lac-description">&nbsp;{description}</div>
-                      </div>
-                      <div className={`lac-tag`}>{dateRange}</div>
+                <div className="lac-card-row">
+                  <div className="lac-card-body">
+                    <div className="lac-card-name">
+                      <span className={`lac-dot ${dotCls}`} />
+                      <span className={`lac-card-title ${statusColor}`}>{roadmap.name}</span>
                     </div>
-                    <CardCalendar roadmap={roadmap} globalCounts={globalCounts} globalRangeDays={globalRangeDays} />
+                    {description && <div className="lac-card-desc">{description}</div>}
+                    <div className="lac-card-meta">
+                      {dateRange && <span>{dateRange}</span>}
+                      {dateRange && <span className="lac-card-meta-sep">·</span>}
+                      <span className="lac-card-meta-num">{cardStats.placeCount}</span>
+                      <span> places</span>
+                      {hasDistance && <span className="lac-card-meta-sep">·</span>}
+                      {hasDistance && <span className="lac-card-meta-num">{cardStats.distanceText}</span>}
+                    </div>
+                    {!canDrag && (
+                      <div className="lac-card-heatmap">
+                        <CardCalendar roadmap={roadmap} globalCounts={globalCounts} globalRangeDays={globalRangeDays} />
+                      </div>
+                    )}
                   </div>
-                  <StaticMap roadmap={roadmap} settings={settings} />
+                  <div className="lac-card-thumb">
+                    <StaticMap roadmap={roadmap} settings={settings} status={statusColor as 'lac-done' | 'lac-todo' | 'lac-na'} />
+                  </div>
                 </div>
               </div>
+              </React.Fragment>
             );
           })}
         </div>
-        {/* 列表底部新增按钮 */}
-        <div className="lac-row lac-justify-center lac-mb-12">
-          <button className="lac-btn--add" onClick={handleAdd}>+</button>
+        {/* 列表底部新增按钮 — 字段日记式安静的虚线 + new trip */}
+        <div style={{ padding: '6px 0 24px' }}>
+          <button type="button" className="lac-btn--quiet" onClick={handleAdd}>+ new trip</button>
         </div>
       </div>
+
+      {contextMenu && (
+        <div
+          className="lac-context-menu"
+          style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button type="button" className="lac-btn lac-context-item" onClick={() => handleDeleteRoadmap(contextMenu.roadmap)}>从集合移除</button>
+          <button type="button" className="lac-btn lac-context-item" onClick={() => handleCopyRoadmap(contextMenu.roadmap)}>复制</button>
+          <button type="button" className="lac-btn lac-context-item lac-context-item-danger" onClick={() => handleDeleteRoadmapPermanently(contextMenu.roadmap)}>彻底删除</button>
+        </div>
+      )}
+
+      <RoadmapEditModal
+        visible={editModalVisible}
+        mode="create"
+        settings={settings}
+        onCancel={() => setEditModalVisible(false)}
+        onConfirm={onConfirmCreate}
+      />
 
       {/* 复用 MapSelector 作为聚合地图的承载（仅展示，不保存）*/}
       <MapSelector

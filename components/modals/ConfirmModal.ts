@@ -17,31 +17,31 @@ export default class ConfirmModal {
   open(): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       this.maskEl = document.createElement('div');
-      this.maskEl.className = 'lifeflow-confirm-mask';
+      this.maskEl.className = 'lac-confirm-mask';
 
       this.modalEl = document.createElement('div');
-      this.modalEl.className = 'lifeflow-confirm-modal';
+      this.modalEl.className = 'lac-confirm-modal';
 
       const content = document.createElement('div');
-      content.className = 'lifeflow-confirm-content';
+      content.className = 'lac-confirm-content';
 
       const title = document.createElement('div');
-      title.className = 'lifeflow-confirm-title';
+      title.className = 'lac-confirm-title';
       title.textContent = '确认';
 
       const msgEl = document.createElement('div');
-      msgEl.className = 'lifeflow-confirm-message';
+      msgEl.className = 'lac-confirm-message';
       msgEl.textContent = this.message;
 
       const actions = document.createElement('div');
-      actions.className = 'lifeflow-confirm-actions';
+      actions.className = 'lac-confirm-actions';
 
       const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'lf-btn lf-btn-cancel';
+      cancelBtn.className = 'lac-btn lac-btn-cancel';
       cancelBtn.textContent = this.cancelText;
 
       const confirmBtn = document.createElement('button');
-      confirmBtn.className = 'lf-btn lf-btn-confirm';
+      confirmBtn.className = 'lac-btn lac-btn-confirm';
       if (this.danger) confirmBtn.classList.add('danger');
       confirmBtn.textContent = this.confirmText;
 

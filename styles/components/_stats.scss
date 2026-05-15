@@ -1,0 +1,6 @@
+// `.lac-stats-line` lives in _typography.scss as a reusable atom.
+// The 5-card legacy classes (`.lac-stats-row` / `-card` / `-label` /
+// `-value` / `.lac-stats-actions` / `.lac-btn-export`) and the wrapper
+// `.lac-stats-wrapper` are no longer rendered after the redesign and
+// have been removed; this partial is kept (empty) to avoid disturbing
+// the import order in roadmap.scss.

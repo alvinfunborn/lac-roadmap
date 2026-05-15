@@ -3,7 +3,7 @@ import { MapLocation } from '../../types/map';
 import MapSelector from '../map/MapSelector';
 import DatePicker from '../DatePicker';
 import TimePicker from '../TimePicker';
-import AddressInput from '../map/AddressInput';
+import PlaceStaticMap from '../PlaceStaticMap';
 import { extractDateFromTime, extractTimeFromDateTime, validateTimeFormat, validateTimeRange } from '../../utils/timeValidation';
 
 interface Props {
@@ -24,9 +24,14 @@ interface Props {
     description?: string;
     address?: MapLocation;
   }) => void;
+  onDelete?: () => void;
+  /** All existing place locations of the parent roadmap — passed through
+   *  to MapSelector so the trip's other pins / connecting polyline show
+   *  as visual context while the user picks an address. */
+  routeLocations?: MapLocation[];
 }
 
-export default function PlaceEditModal({ visible, initial, settings, onCancel, onConfirm }: Props) {
+export default function PlaceEditModal({ visible, initial, settings, onCancel, onConfirm, onDelete, routeLocations }: Props) {
   const [name, setName] = useState(initial?.name || '');
   const [start, setStart] = useState(initial?.start_time || '');
   const [end, setEnd] = useState(initial?.end_time || '');
@@ -138,91 +143,167 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
   };
 
   if (!visible) return null;
+
+  const coordSystem = (address?.coordinate_system || '').toUpperCase();
+  const hasCoords = typeof address?.latitude === 'number' && typeof address?.longitude === 'number';
+  const coordHint = hasCoords
+    ? (coordSystem === 'GCJ-02' || coordSystem === 'GCJ02' ? 'GCJ-02 → WGS84' : 'WGS84')
+    : '';
+  const latText = hasCoords ? `${address!.latitude!.toFixed(4)}°${address!.latitude! >= 0 ? 'N' : 'S'}` : '';
+  const lngText = hasCoords ? `${address!.longitude!.toFixed(4)}°${address!.longitude! >= 0 ? 'E' : 'W'}` : '';
+
   return (
-    <div className="lifeflow-confirm-mask" onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}>
-      <div className="lifeflow-confirm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="lifeflow-confirm-content">
-          <div className="lifeflow-confirm-title">编辑地点</div>
-          <div className="form-grid">
-            <label>名称 *</label>
-            <input
-              type="text"
-              value={name}
-              placeholder="地点名称"
-              className={nameError ? 'lf-input-error' : undefined}
-              onChange={(e) => { setNameError(''); handleInputChange('name', e.target.value); }}
-            />
-            {nameError && <div className="lf-field-error">{nameError}</div>}
+    <div className="lac-confirm-mask" onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}>
+      <div className="lac-confirm-modal lac-place-edit-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="lac-confirm-content">
+          <div className="lac-confirm-eyebrow lac-eyebrow">
+            {initial?.name ? 'edit place' : 'new place'}
+          </div>
+          <h2 className="lac-confirm-title-serif lac-serif">
+            {initial?.name || name || '新地点'}
+          </h2>
+          <div className="lac-place-form">
+            {/* NAME */}
+            <section className="lac-place-section">
+              <div className="lac-place-section-head">
+                <span className="lac-eyebrow">name</span>
+              </div>
+              <input
+                type="text"
+                value={name}
+                placeholder="地点名称"
+                className={`lac-place-name-input${nameError ? ' lac-input-error' : ''}`}
+                onChange={(e) => { setNameError(''); handleInputChange('name', e.target.value); }}
+              />
+              {nameError && <div className="lac-field-error">{nameError}</div>}
+            </section>
 
-            <label>地址</label>
-            {settings.mapApiProvider === 'none' ? (
-              <input
-                type="text"
-                value={address?.name || ''}
-                onChange={(e) => setAddress(e.target.value ? { name: e.target.value } : undefined)}
-                placeholder="地址"
-              />
-            ) : (
-              <AddressInput
-                value={address?.name || ''}
-                onChange={(value) => setAddress(value ? { name: value } : undefined)}
-                onMapClick={() => setPickerVisible(true)}
-                placeholder="点击选择地址"
-              />
-            )}
+            {/* WHEN — single line, date + bold time → date + bold time */}
+            <section className="lac-place-section">
+              <div className="lac-place-section-head">
+                <span className="lac-eyebrow">when</span>
+              </div>
+              <div className="lac-place-when-row">
+                <button type="button" className="lac-place-when-date" onClick={() => openDatePicker('start')}>
+                  {extractDateFromTime(start) || <span className="lac-place-when-placeholder">日期</span>}
+                </button>
+                <button type="button" className="lac-place-when-time" onClick={() => openTimePicker('start')}>
+                  {extractTimeFromDateTime(start) || <span className="lac-place-when-placeholder">--:--</span>}
+                </button>
+                <span className="lac-place-when-arrow">→</span>
+                <button type="button" className="lac-place-when-date" onClick={() => openDatePicker('end')}>
+                  {extractDateFromTime(end) || <span className="lac-place-when-placeholder">日期</span>}
+                </button>
+                <button type="button" className="lac-place-when-time" onClick={() => openTimePicker('end')}>
+                  {extractTimeFromDateTime(end) || <span className="lac-place-when-placeholder">--:--</span>}
+                </button>
+              </div>
+              {timeError && <div className="lac-field-error">{timeError}</div>}
+            </section>
 
-            <label>开始时间</label>
-            <div className="lf-time-input-group">
-              <input
-                type="text"
-                value={extractDateFromTime(start) || ''}
-                placeholder="日期"
-                readOnly
-                onClick={() => openDatePicker('start')}
-                className="lf-time-input lf-date-input"
-              />
-              <input
-                type="text"
-                value={extractTimeFromDateTime(start) || ''}
-                placeholder="时间"
-                readOnly
-                onClick={() => openTimePicker('start')}
-                className="lf-time-input lf-time-input"
-              />
-            </div>
+            {/* WHERE — address + coords on the left, MAP thumb on the right */}
+            <section className="lac-place-section">
+              <div className="lac-place-section-head">
+                <span className="lac-eyebrow">where</span>
+                {coordHint && <span className="lac-place-where-hint">{coordHint}</span>}
+              </div>
+              <div className="lac-place-where-row">
+                <div className="lac-place-where-text">
+                  {settings.mapApiProvider === 'none' ? (
+                    <input
+                      type="text"
+                      value={address?.name || ''}
+                      onChange={(e) => setAddress(e.target.value ? { name: e.target.value } : undefined)}
+                      placeholder="地址"
+                      className="lac-place-where-input"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={address?.name || ''}
+                      placeholder="点击选择地址"
+                      readOnly
+                      onClick={() => setPickerVisible(true)}
+                      className="lac-place-where-input lac-place-where-input--clickable"
+                    />
+                  )}
+                  {hasCoords && (
+                    <div className="lac-place-where-coords">
+                      <span>{latText}</span>
+                      <span className="lac-place-where-coords-sep">·</span>
+                      <span>{lngText}</span>
+                    </div>
+                  )}
+                </div>
+                {settings.mapApiProvider !== 'none' && (
+                  <button
+                    type="button"
+                    className="lac-place-where-thumb"
+                    onClick={() => setPickerVisible(true)}
+                    aria-label="选择地图位置"
+                  >
+                    {hasCoords ? (() => {
+                      // Render the same multi-point thumb the cards use:
+                      // every geocoded place in the trip shows alongside
+                      // the one being edited, with the edited one
+                      // highlighted as the focus. Build the array by
+                      // preserving the trip's order from `routeLocations`,
+                      // then swap in the live-edit `address` at the
+                      // matching slot (so a coord-drag updates the thumb
+                      // in real time). New places (no `initial.name`
+                      // match) get appended at the end.
+                      const live = { lat: address!.latitude!, lng: address!.longitude!, coordinate_system: address!.coordinate_system };
+                      const base = (routeLocations || [])
+                        .filter(l => typeof l.latitude === 'number' && typeof l.longitude === 'number')
+                        .map(l => ({ lat: l.latitude!, lng: l.longitude!, coordinate_system: l.coordinate_system, _name: l.name }));
+                      let idx = initial?.name ? base.findIndex(p => p._name === initial.name) : -1;
+                      if (idx >= 0) {
+                        base[idx] = { ...live, _name: address?.name || '' };
+                      } else {
+                        idx = base.length;
+                        base.push({ ...live, _name: address?.name || '' });
+                      }
+                      const places = base.map(({ _name, ...rest }) => rest);
+                      return (
+                        <PlaceStaticMap
+                          places={places}
+                          currentIndex={idx}
+                          placeName={address?.name || ''}
+                          mapKey={`${address!.latitude}-${address!.longitude}-${places.length}`}
+                          preferredProvider={settings.mapApiProvider as 'google' | 'gaode' | undefined}
+                          settings={settings}
+                        />
+                      );
+                    })() : (
+                      <span className="lac-place-where-thumb-label">map</span>
+                    )}
+                  </button>
+                )}
+              </div>
+            </section>
 
-            <label>结束时间</label>
-            <div className="lf-time-input-group">
-              <input
-                type="text"
-                value={extractDateFromTime(end) || ''}
-                placeholder="日期"
-                readOnly
-                onClick={() => openDatePicker('end')}
-                className="lf-time-input lf-date-input"
+            {/* NOTES */}
+            <section className="lac-place-section">
+              <div className="lac-place-section-head">
+                <span className="lac-eyebrow">notes</span>
+              </div>
+              <textarea
+                value={desc}
+                placeholder="描述"
+                className="lac-place-notes-input"
+                onChange={(e) => handleInputChange('description', e.target.value)}
               />
-              <input
-                type="text"
-                value={extractTimeFromDateTime(end) || ''}
-                placeholder="时间"
-                readOnly
-                onClick={() => openTimePicker('end')}
-                className="lf-time-input lf-time-input"
-              />
-            </div>
-            {timeError && <div className="lf-field-error">{timeError}</div>}
-
-            <label>描述</label>
-            <textarea
-              value={desc}
-              placeholder="描述"
-              onChange={(e) => handleInputChange('description', e.target.value)}
-            />
+            </section>
           </div>
 
-          <div className="lifeflow-confirm-actions">
-            <button className="lf-btn lf-btn-cancel" onClick={onCancel}>取消</button>
-            <button className="lf-btn lf-btn-confirm" onClick={handleSave}>保存</button>
+          <div className="lac-place-actions">
+            {initial?.name && onDelete ? (
+              <button type="button" className="lac-btn lac-btn-danger lac-place-action-delete" onClick={onDelete}>delete</button>
+            ) : <span className="lac-place-action-spacer" />}
+            <div className="lac-place-action-trailing">
+              <button type="button" className="lac-btn lac-btn-cancel" onClick={onCancel}>cancel</button>
+              <button type="button" className="lac-btn lac-btn-confirm" onClick={handleSave}>save</button>
+            </div>
           </div>
         </div>
       </div>
@@ -250,9 +331,11 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
         onConfirm={(loc) => { setAddress(loc); setPickerVisible(false); }}
         settings={{
           mapApiProvider: settings.mapApiProvider,
+          gaodeJsApiKey: settings.gaodeJsApiKey,
           gaodeWebServiceKey: settings.gaodeWebServiceKey,
           googleMapsApiKey: settings.googleMapsApiKey
         }}
+        routeLocations={routeLocations}
       />
     </div>
   );

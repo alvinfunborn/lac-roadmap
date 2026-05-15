@@ -1,10 +1,177 @@
-.lac-map-widget { width: 100%; overflow: hidden; }
-.lac-aggmap { position: relative; width: 100%; background: #222; overflow: hidden; }
-.lac-aggmap-1x1 { padding-top: 100%; }
-.lac-aggmap-2x1 { padding-top: 50%; }
-.lac-aggmap-2x1 .lac-aggmap-canvas > div img { object-fit: cover; }
-.lac-aggmap-3x2 { padding-top: 66.66%;}
-.lac-aggmap-canvas { position: absolute; inset: 0; }
-.lac-aggmap-canvas > div { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; }
-.lac-aggmap-canvas > div > div { width: 100% !important; height: 100% !important; }
+@use '../variables' as *;
 
+// Hero map — matches the design's `.lac-placeholder`-styled hero block.
+// Warm ink surface, hairline border, 12px radius and soft elevation pull
+// the map into the same surface language as the trip cards below it.
+.lac-map-widget {
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+  border-radius: var(--r-12);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-card);
+  background: var(--surface-2);
+}
+
+// "Field journal" map treatment — six-step recipe:
+//   1. Filter the satellite tiles into the warm-ink palette.
+//   2. Mix-blend a 10% gold overlay so everything joins the #B3995D family.
+//   3. Top radial vignette so markers pop instead of fighting the tiles.
+//   4. Bottom 34px gradient mask absorbs the Google/Amap chrome row.
+//   5. Custom mono scale + © attribution chip replace the vendor logo.
+//   6. Top-left scope chip and custom markers handled by JSX + provider code.
+.lac-aggmap {
+  position: relative;
+  width: 100%;
+  background: var(--surface-2);
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+
+  // Layer 2 + 3: gold wash + radial vignette, blended onto the tiles.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(120% 90% at 50% 35%, transparent 0%, rgba(14, 19, 22, 0.45) 100%),
+      linear-gradient(rgba(179, 153, 93, 0.10), rgba(179, 153, 93, 0.10));
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 3;
+  }
+  // Layer 4: bottom 34px gradient mask hides the vendor chrome row.
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34px;
+    background: linear-gradient(to bottom, rgba(14, 19, 22, 0) 0%, rgba(14, 19, 22, 0.72) 55%, var(--ink) 100%);
+    pointer-events: none;
+    z-index: 4;
+  }
+}
+
+.lac-aggmap-1x1 .lac-aggmap-canvas { width: 100%; aspect-ratio: 1;   flex-shrink: 0; min-height: 160px; }
+.lac-aggmap-2x1 .lac-aggmap-canvas { width: 100%; aspect-ratio: 2;   flex-shrink: 0; min-height: 120px; }
+.lac-aggmap-2x1 .lac-aggmap-canvas > div img { object-fit: cover; }
+.lac-aggmap-3x2 .lac-aggmap-canvas { width: 100%; aspect-ratio: 3/2; flex-shrink: 0; min-height: 120px; }
+
+// When the hero map can't render (no key / load failed / empty), show
+// the unified fallback chrome (45° stripes + `MAP` label, image copy 9).
+// Positioned absolutely so it fills the canvas slot instead of pushing
+// layout. The .lac-aggmap ::before/::after vignette + bottom mask are
+// still painted, but since they sit at z 3–4 and the message at z 6,
+// the message wins.
+.lac-aggmap-message {
+  @include lac-map-fallback;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  gap: 8px;
+  &::before {
+    content: 'MAP';
+    @include lac-map-fallback-label(13px, 0.28em);
+  }
+}
+.lac-aggmap-message-text {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  max-width: 280px;
+  padding: 0 16px;
+  text-align: center;
+}
+
+// Layer 1: tile canvas with the warm-ink filter. Markers / polylines
+// render inside, so they share the filter — provider colours are tuned
+// to survive saturation/brightness reduction.
+.lac-aggmap-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  z-index: 2;
+  filter: saturate(0.55) brightness(0.78) hue-rotate(-8deg);
+}
+/* 让 provider 注入的根 div 填满画布；原先把所有后代强制 100% 会让高德的
+   amap-controls / amap-e 等浮层变成全屏覆盖层（== 顶部蒙层 + 不可交互），
+   现在仅限定直接子元素，并仅对 Google 的 gm-style 内部容器铺满。
+   高德 SDK 会自己维护子元素尺寸，不能再强制 100%。 */
+.lac-aggmap-canvas > div { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; pointer-events: auto !important; }
+.lac-aggmap-canvas .gm-style,
+.lac-aggmap-canvas .gm-style > div { width: 100% !important; height: 100% !important; pointer-events: auto !important; }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Floating chips — sit above every layer (gold overlay, vignette, bottom
+// mask) so they read at full contrast. All use mono lettering to echo the
+// design's "data point" voice.
+// ─────────────────────────────────────────────────────────────────────────
+.lac-aggmap-chip {
+  position: absolute;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  background: rgba(14, 19, 22, 0.78);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.lac-aggmap-chip--scope     { top: 8px; left: 8px; }
+.lac-aggmap-chip--attribute { bottom: 6px; right: 8px; font-size: 9px; opacity: 0.85; }
+.lac-aggmap-chip-num        { color: var(--plan); }
+.lac-aggmap-chip-sep        { color: var(--text-4); }
+
+// Legend overlay — quieter style now that polylines collapse to gold.
+.lac-aggmap-legend {
+  position: absolute;
+  left: 8px;
+  bottom: 30px;       // sit above the bottom mask + attribution chip
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 5px 8px;
+  background: rgba(14, 19, 22, 0.78);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 7;
+}
+.lac-aggmap-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.lac-aggmap-legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  position: relative;
+}
+.lac-aggmap-legend-swatch--dashed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to right, rgba(14, 19, 22, 0.78) 0 2px, transparent 2px 5px);
+  background-size: 5px 100%;
+  background-repeat: repeat-x;
+  pointer-events: none;
+}
+.lac-aggmap-legend-label { letter-spacing: 0.02em; }

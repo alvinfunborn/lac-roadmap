@@ -1,0 +1,35 @@
+@use '../variables' as *;
+
+/*
+ * 拖拽视觉反馈集中样式
+ * - lac-sortable-ghost / lac-sortable-chosen / lac-sortable-drag：Sortable.js 钩子
+ * - lac-card--drag-over：原生 DnD 的投放目标高亮
+ */
+
+.lac-sortable-ghost {
+  opacity: 0.4;
+  background: rgba(211, 188, 141, 0.08) !important;
+}
+
+.lac-sortable-chosen.lac-card,
+.lac-sortable-chosen .lac-card {
+  cursor: grabbing;
+  opacity: 0.7;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.lac-sortable-drag {
+  opacity: 0.7 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* 原生 DnD：card 上被 dragover 的高亮 */
+.lac-card.lac-card--drag-over {
+  box-shadow: 0 0 0 2px $lac-primary inset;
+  background: rgba(211, 188, 141, 0.06);
+}
+
+/* 原生 DnD：被拖动 source 卡片 */
+.lac-card.lac-card--dragging {
+  opacity: 0.5;
+}

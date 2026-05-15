@@ -1,91 +1,294 @@
 @use '../variables' as *;
 
+// Field-journal card surface — warm ink + hairline + soft elevation.
+// Sortable.js targets `.lac-card`, so the class name is preserved; only
+// the chrome and inner layout change.
 .lac-card {
-  border-radius: $lac-radius-8;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  // box-shadow: 0 2px 12px 0 $lac-card, 0 1.5px 10px 0 rgba(0,0,0,0.30);
-  // transition: box-shadow 0.2s ease, transform 0.15s ease;
-  background: $lac-card;
-}
-
-// Card with map layout
-.lac-card-content {
-  display: flex;
-  align-items: stretch;
-}
-
-.lac-card-text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  position: relative;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-12);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 
-// wrapper for actual text to float above background calendar
-.lac-card-text-content {
-  position: relative;
-  z-index: 2;
+// Top row: text body on the left, optional 56×56 thumb on the right.
+.lac-card-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 14px 10px;
+}
+
+.lac-card-body {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+// DAY N / 第N天 / wishlist mono eyebrow — shown only on the first place
+// of each day group in the timeline view. The numbered timeline bullet
+// snaps to this row when present (see _roadmap-page.scss).
+.lac-card-day-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+// Title line: status dot + serif name.
+.lac-card-name {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  margin-bottom: 2px;
 }
-
-// right-aligned calendar heatmap background
-.lac-card-calendar {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  // fade from right (opaque) to left (transparent)
-  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1), rgba(0,0,0,0));
-          mask-image: linear-gradient(to left, rgba(0,0,0,1), rgba(0,0,0,0));
-}
-
 .lac-card-title {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+// Status-tinted titles — paired with the matching dot modifier.
+.lac-card-title.lac-done { color: var(--done); }
+.lac-card-title.lac-todo { color: var(--plan); }
+.lac-card-title.lac-na   { color: var(--wish); }
+
+// Italic serif description — quiet, "field notes" feel.
+.lac-card-desc {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.45;
 }
 
-.lac-card-map {
-  width: 100px;
-  height: 100px;
-  border-top-right-radius: $lac-radius-6;
-  border-bottom-right-radius: $lac-radius-6;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  overflow: hidden;
-  background: #222;
+// Mono meta line: date range, place counts, distance.
+.lac-card-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+
+  .lac-card-meta-num { color: var(--text-2); }
+  .lac-card-meta-sep { color: var(--text-4); margin: 0 6px; }
+}
+
+// Square 56×56 thumbnail (was 100×100). Hosts PlaceStaticMap or the
+// striped placeholder; rounded-corner consistency with the design.
+// Radius hard-coded (instead of var(--r-8)) so a theme that strips the
+// custom property can't square the thumbnail back off.
+//
+// `position: relative` makes the thumb the positioning context for the
+// `.lac-card-map-count` chip + the `::after` radial vignette (recipe
+// step 3) so the pin reads first against an ink-toned canvas.
+.lac-card-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  // `overflow: visible` — design (image copy 33.png) wants the count chip
+  // to straddle the bottom-right corner (half inside the map, half
+  // outside). Clipping at the thumb bounds would hide that overhang, so
+  // the inner img / placeholder / ::after vignette each apply their own
+  // `border-radius: 10px` to clip themselves to the rounded square.
+  overflow: visible;
   flex-shrink: 0;
+  background: var(--surface-2);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  isolation: isolate;
+
+  // Recipe step 3 — radial vignette so the bright pin reads first against
+  // a darkened periphery. mix-blend-mode keeps the center area readable
+  // while letting the corners go quiet. z-index 2 keeps it above the
+  // filtered <img> (z-index 1) but below the count chip (z-index 3).
+  // `border-radius: inherit` clips the vignette itself to the rounded
+  // square now that the parent no longer clips for it.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      circle at center,
+      rgba(14, 19, 22, 0) 30%,
+      rgba(14, 19, 22, 0.55) 100%
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
 }
 
+// Heatmap band lives INSIDE `.lac-card-body` — same left column as the
+// title/desc/meta stack, so the temporal strip never bleeds under the
+// right-hand thumb. The right column keeps its negative space (the
+// "field-journal margin"), and the heatmap reads as a continuation of
+// the data column, not as a horizontal shelf.
+//
+// padding-right + max-width force the strip narrower than `flex: 1`
+// would give it — the design treats the heatmap as a fixed-ish data
+// block (~22 cells × 11px ≈ 240px wide), with generous breathing room
+// before the thumb. Without these, even with the heatmap inside the
+// body, on narrow panels its right edge sits 12px from the thumb and
+// reads as "shelf under the thumb"; with these, it always stops well
+// short, mirroring the artboard.
+.lac-card-heatmap {
+  margin-top: 8px;
+  margin-left: 0;
+  padding-right: 24px;
+  max-width: 240px;
+}
+
+// Roadmapset-specific: trips that have no schedule render the compact
+// variant — no heatmap band; the row alone is the whole card.
+.lac-card--compact .lac-card-row { padding-bottom: 14px; }
+
+// StaticMap / PlaceStaticMap render `<img class="lac-card-map-image">` or
+// `<div class="lac-card-map-placeholder">` directly — they don't need a
+// `.lac-card-map` wrapper since `.lac-card-thumb` is now the host. Radius
+// also applied directly on the img as a belt-and-suspenders against any
+// outer `overflow: hidden` getting clobbered.
+//
+// Recipe step 2 — ink-tone the canvas with saturate 0.4 + brightness 0.7
+// so the saturated status pin pops. z-index 1 sits beneath the vignette
+// and count chip.
 .lac-card-map-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-top-right-radius: $lac-radius-6;
-  border-bottom-right-radius: $lac-radius-6;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+  display: block;
+  border-radius: 10px;
+  filter: saturate(0.4) brightness(0.7);
+  z-index: 1;
 }
-
+// Fallback chrome — diagonal stripes + tiny mono `MAP` label, matching
+// the design's image copy 9 placeholder. Shared with the trip hero map,
+// MapSelector empty state, and PlaceEditModal where-thumb so the
+// "no map" affordance is identical everywhere.
 .lac-card-map-placeholder {
+  @include lac-map-fallback;
   width: 100%;
   height: 100%;
+  z-index: 1;
+  border-radius: 10px;
+  gap: 0;
+}
+.lac-card-map-placeholder-text {
+  @include lac-map-fallback-label(8px, 0.22em);
+}
+
+// Recipe step 5 — count chip straddling the thumb's bottom-right corner
+// (image copy 33.png). Rounded SQUARE with a generous 8px corner — fully
+// rounded would read as a notification dot; this softer-square shape
+// echoes the thumb's own 10px rounding while keeping its own identity.
+//
+// Position: `-6px / -6px` slides the chip's center ~4px inside the
+// thumb corner (≈ 60% in / 40% out). The earlier `-10px` put the center
+// exactly on the corner and felt precariously balanced; pulling it
+// inward gives the chip a more anchored, stamped-onto-the-map feel.
+//
+// `box-sizing: border-box` + `line-height: 1` are load-bearing: without
+// them the digit drifts to the top-right because (a) the border adds to
+// the outer dimensions and (b) the default ~1.2 line-height inflates
+// the inline text box, shifting the baseline up. With both set, a
+// single mono digit lands dead-center.
+.lac-card-map-count {
+  box-sizing: border-box;
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  z-index: 4;
+  width: 16px;
+  height: 16px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #333;
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--text-1);
+  background: var(--ink);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+// For multi-digit counts (10+), let the chip stretch horizontally; the
+// rounded square gracefully becomes a rounded rectangle (same radius).
+.lac-card-map-count:not(:empty) {
+  min-width: 16px;
+  width: auto;
+  padding: 0 4px;
 }
 
-.lac-card-map-placeholder-text {
-  font-size: 24px;
-  opacity: 0.6;
+// ─────────────────────────────────────────────────────────────────────────
+// DOM-overlaid place / roadmap markers (image copy 26.png).
+// Static map providers can only paint their own tiny drop-pin shapes, so
+// StaticMap fetches a CLEAN basemap (no `markers=`) and renders these
+// elements on top via Web Mercator math (percentage offsets relative to
+// the source image dimensions, so they scale with the displayed thumb).
+//
+// Z-stack inside `.lac-card-thumb`:
+//   1 — img / placeholder canvas
+//   2 — `::after` radial vignette (darkens basemap)
+//   3 — markers / pins (must read crisp over the darkened basemap)
+//   4 — count chip (always on top, half overhanging the corner)
+// ─────────────────────────────────────────────────────────────────────────
+.lac-card-thumb-marker {
+  box-sizing: border-box;
+  position: absolute;
+  z-index: 3;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.lac-card-thumb-marker--done { background: var(--done); }
+.lac-card-thumb-marker--plan { background: var(--plan); }
+.lac-card-thumb-marker--wish { background: var(--wish); }
+
+// Roadmap "headquarters" pin — small red teardrop, anchored at the
+// bottom-center (the geographically accurate point of a pin), so the
+// pin's tip sits exactly on the lat/lng.
+.lac-card-thumb-pin {
+  position: absolute;
+  z-index: 3;
+  width: 8px;
+  height: 12px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  display: block;
+  overflow: visible;
+}
+
+// PlaceStaticMap multi-point overlay. One SVG covers the whole thumb,
+// viewBox 0..100, so positions computed as percentages drop in directly.
+// Holds the polyline through all places + uniform circle markers; the
+// current place sits at the geometric center because the map is
+// recentered on it (no per-marker highlight needed). `overflow: hidden`
+// clips the polyline tail / off-image circles so the route doesn't
+// sprawl past the thumb edge.
+.lac-card-thumb-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
 }

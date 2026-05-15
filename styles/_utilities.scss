@@ -19,3 +19,29 @@
 .lac-done { color: $lac-done; }
 .lac-na { color: $lac-na; }
 
+.lac-context-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  background: $lac-card;
+  border-radius: $lac-radius-8;
+  box-shadow: $lac-shadow-2;
+  min-width: 100px;
+}
+.lac-context-item {
+  padding: 8px 12px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: $lac-text;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  &:hover { background: rgba(255,255,255,0.1); }
+  &.lac-context-item-danger {
+    color: $lac-na;
+    &:hover { background: rgba(170, 0, 0, 0.18); }
+  }
+}
+

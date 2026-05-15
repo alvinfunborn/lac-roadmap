@@ -1,32 +1,110 @@
-.lac-tabs { display: flex; gap: 6px; }
-.lac-tab { margin-right: 0; border-radius: 6px; padding: 4px 10px; border: 1px solid transparent; cursor: pointer; }
-.lac-tab:hover { background: rgba(255,255,255,0.10); }
-.lac-tab.active { background: rgba(211, 188, 141, 0.25); border-color: rgba(211, 188, 141, 0.65); }
+@use '../variables' as *;
 
-// browser-like overlapping tabs with horizontal scroll
-.lac-tabs--browser {
+// Quiet typographic day tabs — three-tier (DAY n / 11·01 / count) with a
+// hairline underline and an active gold rule. Replaces the previous browser-
+// tab z-stack while keeping the same outer .lac-tabs container so the
+// drag-drop wiring on pages/roadmap/index.tsx (.lac-tabs onPointerMove +
+// data-tab-key children) keeps working.
+
+.lac-tabs {
   display: flex;
-  gap: 0;
+  gap: 2px;
+  flex-wrap: nowrap;
+  align-items: flex-end;
   overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+// Each tab is a column-flex block; mono labels stack vertically. The
+// active state replaces a 1.5px gold underline (matches the artboard's
+// `borderBottom: "1.5px solid var(--plan)"`).
+//
+// Obsidian themes paint <button> elements with a default rounded pill
+// background + box-shadow + min-height; without aggressive resets each
+// tab renders as a dark pill instead of typography on a line. Every
+// chrome property is forced back to neutral so only the underline rule
+// (active) and label colors mark the state.
+.lac-tab {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 52px;
+  min-height: 0 !important;
+  padding: 6px 8px 8px !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 1.5px solid transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  cursor: pointer;
   white-space: nowrap;
-  padding-left: 0px;
-  -ms-overflow-style: none; /* IE/Edge */
-  scrollbar-width: none; /* Firefox */
+  color: var(--text-3) !important;   // defeat Obsidian theme `button { color: var(--text-on-accent) }` etc.
+  text-align: left;
+  transition: color 0.12s ease, border-color 0.12s ease;
+
+  &:hover  { background: transparent !important; color: var(--text-2) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:active { background: transparent !important; box-shadow: none !important; }
+  &.active {
+    border-bottom-color: var(--plan) !important;
+    color: var(--text-1) !important;
+    .lac-day-tab-label { color: var(--text-1) !important; }
+  }
 }
-.lac-tabs--browser::-webkit-scrollbar { display: none; }
-.lac-tabs--browser .lac-tab {
-  border-radius: 8px 8px 0 0;
-  padding: 6px 12px;
-  margin-right: -6px; /* overlap */
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  position: relative;
-  z-index: 1;
+
+// Inner three-tier markup. The eyebrow stays gray regardless of active
+// state (design intent: eyebrow is *category*, label is *focus*).
+.lac-day-tab-eyebrow {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
-.lac-tabs--browser .lac-tab.active {
-  background: rgba(211, 188, 141, 0.15);
-  border-color: rgba(211, 188, 141, 0.55);
-  z-index: 2;
+.lac-day-tab-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
-.lac-tabs--browser .lac-tab:hover { filter: brightness(1.05); }
+.lac-day-tab-label {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  transition: color 0.12s ease;
+}
+.lac-day-tab-count {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-4);
+}
+
+// Drag-reorder feedback (preserved from previous implementation).
+.lac-tab.lac-tab--dragging  { opacity: 0.5; cursor: grabbing; }
+.lac-tab.lac-tab--drag-over { box-shadow: inset 3px 0 0 var(--plan); }
+
+// "+ day" tab — quiet mono +, no underline, right-anchored. Inherits the
+// `.lac-tab` chrome resets above so Obsidian's button pill doesn't sneak
+// back in; this rule only overrides the dimensions / typography.
+.lac-tab--add {
+  min-width: 0;
+  padding: 6px 8px 10px !important;
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-3) !important;   // overrides Obsidian theme that paints `button { color: var(--text-on-accent) }` (white-on-gold)
+  align-self: flex-end;
+  border-bottom: 1.5px solid transparent !important;
+  &:hover { background: transparent !important; color: var(--text-2) !important; }
+}
 

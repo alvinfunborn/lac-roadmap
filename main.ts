@@ -38,9 +38,9 @@ class RoadmapView extends ItemView {
       const repo = this.repository;
       const isEntry = await repo.isValidEntry();
       if (isEntry) {
-        this.reactRoot.render(React.createElement(RoadmapSetPage, { app: this.plugin.app, repository: repo, settings: this.plugin.settings }));
+        this.reactRoot.render(React.createElement(RoadmapSetPage, { app: this.plugin.app, repository: repo, settings: this.plugin.settings, leaf: this.leaf }));
       } else {
-        this.reactRoot.render(React.createElement(RoadmapPage, { app: this.plugin.app, repository: repo, filePath: this.filePath, settings: this.plugin.settings }));
+        this.reactRoot.render(React.createElement(RoadmapPage, { app: this.plugin.app, repository: repo, filePath: this.filePath, settings: this.plugin.settings, leaf: this.leaf }));
       }
     }
   }

@@ -1,4 +1,418 @@
+@use '../variables' as *;
+
 .lac-edit-modal {
-  .lf-map-search-input { width: 100%; }
+  .lac-map-search-input { width: 100%; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PlaceEditModal — field-journal "Edit Place" sheet.
+// Matches docs/design/image copy 5.png:
+//   eyebrow + serif title
+//   NAME   → large serif input on hairline
+//   WHEN   → date + bold-time → date + bold-time, one mono line
+//   WHERE  → address + coords on the left, MAP thumb on the right,
+//            "GCJ-02 → WGS84" projection hint floats to top-right
+//   NOTES  → italic serif textarea
+//   delete | cancel  save
+// Wider than the generic confirm modal — the where-row needs room for
+// the inline thumb.
+// ─────────────────────────────────────────────────────────────────────────
+.lac-confirm-modal.lac-place-edit-modal,
+.lac-confirm-modal.lac-trip-edit-modal {
+  max-width: 460px;
+  width: 92vw;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RoadmapEditModal — `new trip / edit trip` sheet.
+// Reuses every `.lac-place-*` field-journal hook from PlaceEditModal so
+// the eyebrow / section / hairline structure stays identical; only the
+// trip-specific bits (WHEN row, PROVIDER dropdown, title-status suffix)
+// add their own classes.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Title — serif name + faint "· draft" / "· editing" suffix.
+.lac-trip-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lac-trip-title-status {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+// NAME — the trip-name input is wider and slightly larger than the
+// place-name input to act as the visual anchor of the modal.
+.lac-trip-name-input {
+  font-size: 24px !important;
+  border-bottom: 1px solid var(--plan) !important;
+  padding-bottom: 4px !important;
+}
+
+// WHEN row — `start → end` mono dates with an `edit` mono link pinned
+// to the right. The dates themselves are clickable (each opens its own
+// picker); `edit` is the same affordance but right-aligned for muscle
+// memory.
+.lac-trip-when-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--text-1);
+}
+.lac-trip-when-date {
+  font-size: 16px !important;
+  color: var(--text-1) !important;
+  font-weight: 400 !important;
+}
+.lac-trip-when-edit {
+  // Reuses the WHEN-date chrome resets (Obsidian button-pill defeat).
+  appearance: none;
+  -webkit-appearance: none;
+  margin-left: auto !important;
+  margin-right: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.12s ease;
+  &:hover  { background: transparent !important; color: var(--text-1); }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:active { background: transparent !important; }
+}
+
+// WHERE thumb — same 56×56 square recipe inherited from .lac-place-where-thumb;
+// just makes sure a nested <img> from PlaceStaticMap fills it cleanly.
+.lac-place-where-thumb,
+.lac-trip-where-thumb {
+  // `position: relative` is load-bearing — PlaceStaticMap renders
+  // `<span class="lac-card-thumb-marker" style="position:absolute">`
+  // children, and without a positioned ancestor those escape up the
+  // DOM and surface as stray gold dots somewhere on the modal (the bug
+  // image copy 38 calls out).
+  position: relative;
+  padding: 0 !important;
+  overflow: hidden;
+  // Hide the diagonal stripes when an actual mini-map image is rendered
+  // inside; the fallback (`.lac-place-where-thumb-label`) keeps the stripes.
+  &:has(.lac-card-map-image),
+  &:has(.lac-card-map-placeholder) {
+    background-image: none;
+  }
+  .lac-card-map-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 9px;
+    filter: saturate(0.4) brightness(0.7);
+  }
+}
+
+// PROVIDER row — gold status dot + mono select + caret. The native
+// <select> sits between the dot and the caret; appearance:none strips its
+// chrome so the row reads as one inline pill.
+.lac-trip-provider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.lac-trip-provider-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--plan);
+  box-shadow: 0 0 0 2px rgba(211, 188, 141, 0.18);
+}
+.lac-trip-provider-select {
+  flex: 1;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  font-family: var(--mono) !important;
+  font-size: 13px !important;
+  letter-spacing: 0.04em;
+  color: var(--text-1) !important;
+  cursor: pointer;
+  outline: none !important;
+  option { background: var(--surface-1); color: var(--text-1); }
+}
+.lac-trip-provider-caret {
+  color: var(--text-3);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.lac-place-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 4px;
+}
+
+.lac-place-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 12px;
+  &:last-of-type { border-bottom: 0; padding-bottom: 0; }
+}
+
+.lac-place-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+// Projection hint at the right of the WHERE eyebrow.
+.lac-place-where-hint {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+// NAME — large serif input, no border (lives in section without hairline).
+.lac-place-name-input {
+  width: 100%;
+  height: auto;
+  padding: 2px 0 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+  background: transparent;
+  border: 0;
+  outline: none;
+  &::placeholder { color: var(--text-4); font-style: italic; }
+  &:focus { color: var(--text-1); }
+}
+
+// WHEN — flex row, mono date + bold mono time → mono date + bold mono time.
+// Obsidian themes style native <button> aggressively (rounded dark pill,
+// box-shadow, min-height), so each segment resets every chrome property
+// to make it read as plain inline text. `appearance: none` + explicit 0
+// padding/height defeat the global button reset.
+.lac-place-when-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.lac-place-when-date,
+.lac-place-when-time {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0;
+  height: auto !important;
+  min-height: 0 !important;
+  line-height: 1.4;
+  font-family: var(--mono);
+  color: var(--text-1);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  transition: color 0.12s ease;
+  &:hover  { background: transparent !important; color: var(--plan); }
+  &:focus,
+  &:active { background: transparent !important; box-shadow: none !important; outline: none; }
+}
+.lac-place-when-date { font-size: 13px; color: var(--text-2); }
+.lac-place-when-time { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.lac-place-when-arrow {
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 0 2px;
+}
+.lac-place-when-placeholder {
+  color: var(--text-4);
+  font-weight: 400;
+}
+
+// WHERE — two columns: text block on the left, square map thumb on right.
+.lac-place-where-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.lac-place-where-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lac-place-where-input {
+  width: 100%;
+  height: auto;
+  padding: 2px 0;
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--text-1);
+  background: transparent;
+  border: 0;
+  outline: none;
+  &::placeholder { color: var(--text-4); font-style: italic; }
+}
+.lac-place-where-input--clickable { cursor: pointer; }
+.lac-place-where-coords {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  .lac-place-where-coords-sep { margin: 0 6px; color: var(--text-4); }
+}
+
+// 路线编辑器的「起点 / 终点」只读派生信息行 —— 同 PROVIDER 行的
+// dot-style 结构：mono 小标签 + 等宽地点名。两行紧贴左列。
+.lac-trip-endpoint {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+}
+.lac-trip-endpoint-label {
+  flex-shrink: 0;
+  width: 36px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.lac-trip-endpoint-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Striped MAP thumb on the right — clickable button that opens MapSelector.
+// Diagonal hatching matches the unified "no map yet" affordance shared
+// with the card thumbnail / hero map / MapSelector empty state
+// (docs/design/image copy 9.png).
+.lac-place-where-thumb {
+  @include lac-map-fallback;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline-strong);
+  cursor: pointer;
+  // Belt-and-braces against Obsidian theme button resets that paint a
+  // rounded pill background on every <button>.
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
+  padding: 0;
+  transition: border-color 0.15s ease, transform 0.05s ease;
+  &:hover { border-color: rgba(237, 231, 218, 0.28); }
+  &:active { transform: translateY(1px); box-shadow: none; }
+  &:focus { outline: none; }
+}
+.lac-place-where-thumb-label {
+  @include lac-map-fallback-label(10px, 0.18em);
+}
+
+// 路线编辑器的总览缩略图 —— 共享 .lac-place-where-thumb 的尺寸/边框。
+// 当没有任何带坐标地点时退回 placeholder <div>（不可点）；有坐标时改用
+// <button class="...--clickable">，恢复 cursor / hover / active 反馈让用户
+// 知道可以点开查看大图。
+.lac-trip-where-thumb {
+  cursor: default;
+  &:hover { border-color: var(--hairline-strong); }
+  &:active { transform: none; }
+}
+.lac-trip-where-thumb--clickable {
+  cursor: zoom-in;
+  &:hover { border-color: rgba(237, 231, 218, 0.32); }
+  &:active { transform: translateY(1px); }
+}
+
+
+// NOTES — boxed italic serif textarea.
+.lac-place-notes-input {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--text-1);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-8);
+  outline: none;
+  resize: vertical;
+  &::placeholder { color: var(--text-4); }
+  &:focus { border-color: var(--hairline-strong); }
+}
+
+// Bottom action row — delete (mono red, left) | spacer | cancel + save (right).
+.lac-place-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 18px;
+  gap: 8px;
+}
+.lac-place-action-spacer { flex: 1; }
+.lac-place-action-delete {
+  flex-shrink: 0;
+  margin-right: auto;
+}
+.lac-place-action-trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 

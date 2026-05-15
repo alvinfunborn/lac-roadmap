@@ -4,25 +4,78 @@
   cursor: pointer;
   padding: 6px 10px;
   border-radius: $lac-radius-6;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--hairline-strong);
   background: transparent;
-  color: #fff;
-  transition: filter 0.15s ease, transform 0.15s ease;
-  &.primary { background: $lac-primary; border-color: $lac-primary; }
-  &.danger { background: $lac-danger; border-color: $lac-danger; }
-  &.ghost { background: rgba(255, 255, 255, 0.10); border-color: rgba(255, 255, 255, 0.2); }
-  &:hover { filter: brightness(1.05); }
+  color: var(--text-1);
+  font-family: var(--sans);
+  transition: filter 0.15s ease, transform 0.15s ease, background 0.15s ease;
+
+  &.primary { background: var(--plan); border-color: var(--plan); color: var(--ink); font-weight: 600; }
+  &.danger  { background: var(--danger); border-color: var(--danger); color: var(--text-1); }
+  &.ghost   { background: var(--surface-2); border-color: var(--hairline-strong); }
+
+  &:hover  { filter: brightness(1.05); }
   &:active { transform: translateY(1px); }
   &.disabled, &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
-// Add button variant: backgroundless plus, primary color, scale/raise on hover/active
+// Quiet typographic button — used for "+ new trip", "+ add place", "↓ export".
+// Mono uppercase, dashed hairline border, transparent surface. The dashed
+// modifier reads as a placeholder/CTA; the solid modifier is for inline
+// secondary actions like ↓ export sitting next to the dashed primary.
+.lac-btn--quiet,
+button.lac-btn--quiet {
+  // Defeat Obsidian theme button chrome — themes set `min-height: 32-36px`
+  // on native <button>, which silently bloated the action-row buttons
+  // past the design's slim ~22px target regardless of our own padding.
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: 1px dashed var(--hairline-strong) !important;
+  border-radius: $lac-radius-10 !important;
+  // 2px shorter than the pre-Obsidian-reset baseline (was 7px → now 6px
+  // top/bottom). Combined with `min-height: 0` defeating the theme's
+  // floor, this is the design's slim CTA size — close to the old visual
+  // but a hair less bulky.
+  padding: 6px 12px !important;
+  width: 100%;
+  color: var(--text-3) !important;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+
+  &:hover  { background: transparent !important; color: var(--text-2) !important; border-color: rgba(237, 231, 218, 0.22) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:active { background: transparent !important; color: var(--text-1) !important; }
+
+  &.lac-btn--quiet-solid {
+    border-style: solid !important;
+    width: auto;
+    padding: 5px 12px !important;
+    letter-spacing: 0.12em;
+  }
+
+}
+
+// Add-button (round +) — keep the floating affordance for ad-hoc lists where
+// the dashed full-width button doesn't fit (context menus etc.).
 .lac-btn--add,
 button.lac-btn--add {
   padding: 0;
   border: none !important;
   background: transparent !important;
-  color: $lac-primary;
+  color: var(--plan);
   width: 36px;
   height: 36px;
   line-height: 36px;
@@ -31,7 +84,6 @@ button.lac-btn--add {
   text-align: center;
   border-radius: 50%;
   transition: transform 0.15s ease, filter 0.15s ease;
-  &:hover { transform: translateY(-2px) scale(1.08); filter: none; }
+  &:hover  { transform: translateY(-2px) scale(1.08); filter: none; }
   &:active { transform: translateY(-1px) scale(0.98); }
 }
-

@@ -1,24 +1,67 @@
+@use '../variables' as *;
+
 .lac-roadmapset-root {
   display: flex;
   flex-direction: column;
   height: 100%;
+  // Match `.lac-roadmap-root` so the homepage doesn't inherit Obsidian's
+  // theme text colour / font family. Without this, the warm-parchment
+  // palette gets shadowed by `--text-normal` on the surrounding workspace
+  // leaf and the cards look colourless.
+  color: var(--text-1);
+  background: var(--ink);
+  font-family: var(--sans);
 }
 
+// Fixed header: eyebrow → title row → stat strip → hero map, mirroring
+// the design's `20px 20px 14px` rhythm but tightened to 12px horizontal
+// so the rounded hero map breathes inside an Obsidian side panel without
+// touching the panel edge.
 .lac-roadmapset-header {
   flex-shrink: 0;
+  padding: 16px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
+
+.lac-roadmapset-eyebrow {
+  margin: 0;
+}
+
+.lac-roadmapset-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lac-roadmapset-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  color: var(--text-1);
+}
+
+.lac-roadmapset-count {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.lac-roadmapset-stats { margin: 0; }
 
 .lac-roadmapset-list-wrapper {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 12px 80px;
-  // hide scrollbar
+  // Generous bottom so "+ new trip" clears the Obsidian status bar / mobile
+  // bottom toolbar; safe-area inset accounts for iPhone home indicator.
+  padding: 0 12px calc(80px + env(safe-area-inset-bottom, 0px));
   scrollbar-width: none;
   -ms-overflow-style: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  &::-webkit-scrollbar { display: none; }
 }
 
 .lac-roadmapset-list {
@@ -27,3 +70,16 @@
   gap: 10px;
 }
 
+// Section eyebrow row — "未安排 · wishlist", "已规划 · planned".
+// Lives as a sibling inside `.lac-card-list`; small top margin pushes it
+// away from the card above without breaking Sortable.js (eyebrow is not a
+// `.lac-card`, so the drag selector ignores it).
+.lac-list-eyebrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 0 4px;
+
+  &:first-child { padding-top: 4px; }
+  & + .lac-list-eyebrow { padding-top: 16px; }
+}

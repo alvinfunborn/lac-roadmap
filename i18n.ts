@@ -1,4 +1,4 @@
-type Locale = 'auto' | 'en' | 'zh';
+type Locale = 'auto' | 'en' | 'zh' | 'zh-CN';
 
 let currentLocale: Locale = 'auto';
 
@@ -41,7 +41,36 @@ const dict: Record<string, Record<string, string>> = {
     'settings.map.googleKey.placeholder': '请输入 Google Maps API Key',
     'main.sampleRoadmap': '日本之行',
     'main.samplePlace1': '银座',
-    'main.samplePlace2': '秋叶原'
+    'main.samplePlace2': '秋叶原',
+    'modal.roadmap.create.title': '新建路线',
+    'modal.roadmap.edit.title': '编辑路线',
+    'modal.roadmap.name': '路线名称',
+    'modal.roadmap.description': '描述',
+    'modal.roadmap.start': '开始日期',
+    'modal.roadmap.end': '结束日期',
+    'modal.roadmap.address': '地址/地区',
+    'modal.roadmap.mapProvider': '地图提供商',
+    'modal.roadmap.followGlobal': '跟随全局',
+    'modal.routeSegment.title': '编辑路线段',
+    'modal.routeSegment.travelMode': '交通方式',
+    'modal.routeSegment.distance': '距离（米）',
+    'modal.routeSegment.duration': '用时（分钟）',
+    'modal.routeSegment.tolls': '费用（元）',
+    'modal.routeSegment.autoCalc': '自动计算',
+    'modal.routeSegment.calculating': '计算中...',
+    'modal.routeSegment.mode.walk': '步行',
+    'modal.routeSegment.mode.bicycle': '骑行',
+    'modal.routeSegment.mode.two_wheeler': '摩托',
+    'modal.routeSegment.mode.drive': '驾车',
+    'modal.routeSegment.mode.transit': '公交',
+    'modal.routeSegment.noEndpoints': '缺少起点或终点',
+    'modal.routeSegment.calcFailed': '路线计算失败：缺少坐标或 API Key',
+    'modal.routeSegment.calcFailedShort': '路线计算失败',
+    'modal.routeSegment.manualEditHint': '已插入空路线段，请手动编辑',
+    'modal.common.cancel': '取消',
+    'modal.common.save': '保存',
+    'modal.common.delete': '删除',
+    'modal.common.nameRequired': '名称不能为空'
   },
   'en': {
     'command.open': 'Open',
@@ -52,7 +81,36 @@ const dict: Record<string, Record<string, string>> = {
     'notice.initialDataCreated': 'Sample data created',
     'main.sampleRoadmap': 'Japan Trip',
     'main.samplePlace1': 'Ginza',
-    'main.samplePlace2': 'Akihabara'
+    'main.samplePlace2': 'Akihabara',
+    'modal.roadmap.create.title': 'New Roadmap',
+    'modal.roadmap.edit.title': 'Edit Roadmap',
+    'modal.roadmap.name': 'Name',
+    'modal.roadmap.description': 'Description',
+    'modal.roadmap.start': 'Start date',
+    'modal.roadmap.end': 'End date',
+    'modal.roadmap.address': 'Address / Region',
+    'modal.roadmap.mapProvider': 'Map provider',
+    'modal.roadmap.followGlobal': 'Follow global',
+    'modal.routeSegment.title': 'Edit Route Segment',
+    'modal.routeSegment.travelMode': 'Travel mode',
+    'modal.routeSegment.distance': 'Distance (m)',
+    'modal.routeSegment.duration': 'Duration (min)',
+    'modal.routeSegment.tolls': 'Tolls',
+    'modal.routeSegment.autoCalc': 'Auto calculate',
+    'modal.routeSegment.calculating': 'Calculating...',
+    'modal.routeSegment.mode.walk': 'Walk',
+    'modal.routeSegment.mode.bicycle': 'Bicycle',
+    'modal.routeSegment.mode.two_wheeler': 'Two-wheeler',
+    'modal.routeSegment.mode.drive': 'Drive',
+    'modal.routeSegment.mode.transit': 'Transit',
+    'modal.routeSegment.noEndpoints': 'Missing start or end point',
+    'modal.routeSegment.calcFailed': 'Route calculation failed: missing coordinates or API key',
+    'modal.routeSegment.calcFailedShort': 'Route calculation failed',
+    'modal.routeSegment.manualEditHint': 'Empty route segment inserted, please edit manually',
+    'modal.common.cancel': 'Cancel',
+    'modal.common.save': 'Save',
+    'modal.common.delete': 'Delete',
+    'modal.common.nameRequired': 'Name is required'
   }
 };
 
@@ -61,7 +119,7 @@ export function setLocale(locale: Locale) {
 }
 
 export function t(key: string): string {
-  const lang = currentLocale === 'auto' ? 'zh' : currentLocale; // default zh
+  const lang = currentLocale === 'auto' ? 'zh' : (currentLocale === 'zh-CN' ? 'zh' : currentLocale); // default zh
   return dict[lang]?.[key] ?? key;
 }
 

@@ -1,11 +1,13 @@
 @use 'variables' as *;
+@use 'sass:color';
 
-.lf-picker-mask {
+// ─────────────────────────────────────────────────────────────────────────
+// Picker chrome — shared mask + modal + base actions row.
+// Date / Time pickers add their own component-specific blocks below.
+// ─────────────────────────────────────────────────────────────────────────
+.lac-picker-mask {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: $lac-mask;
   z-index: 10001;
   display: flex;
@@ -13,161 +15,525 @@
   justify-content: center;
 }
 
-.lf-picker-modal {
-  background: $lac-card;
-  color: $lac-text;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  width: 90vw;
-  max-width: 380px;
-  animation: lfPickerSlideIn 0.18s ease-out;
+.lac-picker-modal {
+  background: var(--surface-1);
+  color: var(--text-1);
+  border-radius: var(--r-12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--hairline);
+  width: 92vw;
+  max-width: 360px;
+  font-family: var(--sans);
+  animation: lacPickerSlideIn 0.18s ease-out;
 }
 
-@keyframes lfPickerSlideIn {
+@keyframes lacPickerSlideIn {
   from { opacity: 0; transform: scale(0.98) translateY(-8px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.lf-picker-content {
-  padding: 16px;
+.lac-picker-content {
+  padding: 16px 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.lf-picker-title {
-  font-size: 16px;
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 4px;
-  color: $lac-text;
+// Mono uppercase eyebrow — used by both pickers.
+.lac-picker-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--text-3);
+  margin-bottom: 0;
 }
 
-.lf-wheel-container {
+// Unified `clear · cancel · save` action row — same shape on DatePicker
+// and TimePicker so the muscle memory is consistent. `clear` pushed to
+// the left via auto margin; `cancel + save` stay tight on the right.
+.lac-picker-actions {
   display: flex;
-  flex-direction: row;
-  height: 260px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+
+  .lac-picker-btn-clear { margin-right: auto; }
 }
 
-.lf-wheel-column {
-  flex: 1;
+.lac-picker-btn {
+  height: auto;
+  padding: 8px 14px;
+  border-radius: var(--r-8);
+  border: 1px solid var(--hairline-strong);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover  { color: var(--text-1); background: var(--surface-2); }
+  &:active { transform: translateY(1px); }
+}
+
+.lac-picker-modal .lac-picker-btn.lac-picker-btn-confirm {
+  background: var(--plan);
+  border-color: var(--plan);
+  color: var(--ink);
+  font-weight: 600;
+  &:hover { background: color.adjust(#D3BC8D, $lightness: 5%); border-color: color.adjust(#D3BC8D, $lightness: 5%); color: var(--ink); }
+}
+
+.lac-picker-btn.lac-picker-btn-cancel {
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--hairline-strong);
+  &:hover { background: var(--surface-2); color: var(--text-1); }
+}
+
+.lac-picker-modal .lac-picker-btn.lac-picker-btn-clear {
+  background: transparent;
+  color: var(--danger);
+  border: none;
+  padding: 8px 0;
+  letter-spacing: 0.12em;
+  &:hover { background: transparent; color: color.adjust(#B65454, $lightness: 8%); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// DatePicker — calendar grid. See docs/design/image copy 7.png.
+//   eyebrow + serif month + mono year + ‹›
+//   weekday row (mo tu we th fr sa su, weekend gold)
+//   6×7 mono date cells; today = hairline outline; selected = filled gold
+//   density dot (4px) under each cell, tier scaled like the heatmap
+//   footer: MM·DD · weekday  ‧  today  clear
+// ─────────────────────────────────────────────────────────────────────────
+.lac-picker-modal.lac-datepicker { max-width: 340px; }
+
+.lac-datepicker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lac-datepicker-head-left {
   display: flex;
   flex-direction: column;
-  position: relative;
+  gap: 2px;
+}
+.lac-datepicker-monthrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.lac-datepicker-month {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.lac-datepicker-year {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 
-.lf-wheel-column:not(:last-child) {
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+// ‹ › month navigation — 24×24 hairline squares, mono caret. Same chrome
+// resets as the WHEN-row dates / tab strip to defeat Obsidian button
+// theme paint.
+.lac-datepicker-nav {
+  display: flex;
+  gap: 6px;
 }
-
-.lf-wheel-items {
-  flex: 1;
-  overflow-y: auto;
-  padding: 110px 0; /* 让选中项居中 */
-}
-
-.lf-wheel-items::-webkit-scrollbar {
-  display: none;
-}
-
-.lf-wheel-item {
-  height: 36px;
+.lac-datepicker-navbtn {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px !important;
+  height: 24px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 1px solid var(--hairline-strong) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  // Chevron is inline SVG (`<polyline>`) — earlier `‹` / `›` (U+2039 /
+  // 203A) glyphs rendered LOW inside the button due to font vertical
+  // metrics (the bug image copy 35 calls out). SVG centers
+  // geometrically through flex, no font-metric guessing.
+  color: var(--text-2) !important;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.6);
+  transition: color 0.15s ease, border-color 0.15s ease;
+  > svg { display: block; }
+  &:hover  { background: transparent !important; color: var(--text-1) !important; border-color: rgba(237, 231, 218, 0.28) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:active { background: transparent !important; transform: translateY(1px); }
+}
+
+// Weekday row + grid both share the same 7-column track.
+.lac-datepicker-weekrow,
+.lac-datepicker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.lac-datepicker-weekrow {
+  gap: 0;
+  padding: 0 0 4px;
+}
+.lac-datepicker-weekday {
+  font-family: var(--mono);
+  font-size: 9px;
+  text-align: center;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+}
+.lac-datepicker-weekday--weekend { color: var(--plan); }
+
+.lac-datepicker-grid {
+  gap: 2px;
+}
+
+// Each day cell — square, mono number, 4px density dot beneath. All
+// Obsidian button chrome is reset !important so themes can't paint a
+// filled pill where the design expects flat typography.
+.lac-datepicker-cell {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-1) !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+
+  &:hover  { background: var(--surface-2) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:active { box-shadow: none !important; }
+  &--out  { color: var(--text-4) !important; cursor: default; }
+  &--out:hover { background: transparent !important; }
+
+  // Today — hairline outline, no fill so it never steals from a selected cell.
+  &.is-today {
+    border-color: var(--hairline-strong) !important;
+    color: var(--text-1) !important;
+  }
+
+  // Selected — filled gold, ink text, rounded square.
+  &.is-selected {
+    background: var(--plan) !important;
+    color: var(--ink) !important;
+    border-color: var(--plan) !important;
+    .lac-datepicker-cell-num { color: var(--ink); font-weight: 600; }
+    .lac-datepicker-cell-dot { background: rgba(14, 19, 22, 0.55); }
+  }
+}
+.lac-datepicker-cell-num {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+// 4px density indicator. Tiers reuse the heatmap palette so callers that
+// pass `dayCounts` from the page get visual coherence with the card heatmap.
+.lac-datepicker-cell-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  display: block;
+}
+.lac-datepicker-cell-dot--t1 { background: var(--heat-1); }
+.lac-datepicker-cell-dot--t2 { background: var(--heat-2); }
+.lac-datepicker-cell-dot--t3 { background: var(--heat-3); }
+.lac-datepicker-cell-dot--t4 { background: var(--heat-4); }
+.lac-datepicker-cell-dot--t5 { background: var(--heat-5); }
+
+// Footer summary + secondary actions row.
+.lac-datepicker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+}
+.lac-datepicker-summary {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.lac-datepicker-summary-date { color: var(--text-1); }
+.lac-datepicker-summary-sep  { margin: 0 6px; color: var(--text-4); }
+.lac-datepicker-summary-meta { color: var(--text-3); }
+
+.lac-datepicker-footer-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 2px 0 !important;
+  min-height: 0 !important;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3) !important;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  &:hover  { background: transparent !important; color: var(--text-1) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TimePicker — dual scroll wheel. See docs/design/image copy 7.png.
+// Layout principles:
+//   • 5-row viewport (5 × 30px = 150px); center row is the selected slot.
+//   • The two columns share a colon in between; the colon is its own
+//     flex child so it sits on the same baseline as the selected number.
+//   • Center selected band: hairline-strong rules above/below + 6% gold tint
+//     (.lac-timepicker-wheels::before).
+//   • Top/bottom 36px fade-to-surface via the ::after gradient overlay.
+//   • Selected row gets a small mono unit suffix (`h` / `m`) — design touch.
+// ─────────────────────────────────────────────────────────────────────────
+.lac-picker-modal.lac-timepicker { max-width: 340px; }
+
+.lac-timepicker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.lac-timepicker-head-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+}
+
+// Wheel container — TWO independent rounded columns with a clear gap
+// between them; the colon floats over the gap, centered on the selected
+// band (docs/design/image copy 22.png).
+// ONE rounded container holds BOTH columns flush — design (image 27)
+// shows a unified rectangle with the colon as the only divider. The
+// previous build painted each column with its own border + radius +
+// 28px gap, which read as two separate boxes (image 28). We collapse
+// back to: container has the surface + border + radius, columns are
+// transparent panes inside, colon overlays at the center.
+.lac-timepicker-wheels {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0;
+  height: 150px;          // 5 × 30
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-12);
+  overflow: hidden;
+
+  // Center selected band — spans both columns (image 27). Hairline
+  // rules top + bottom + a darker ink fill so the selected row reads
+  // as a horizontal highlight strip, not as a gold pill.
+  &::before {
+    content: '';
+    position: absolute;
+    top: 60px;            // (5-1)/2 * 30 = 60
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: rgba(14, 19, 22, 0.45);
+    border-top: 1px solid var(--hairline-strong);
+    border-bottom: 1px solid var(--hairline-strong);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  // Top + bottom 36px fade-to-surface for the off-center rows.
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to bottom, var(--surface-2) 0, rgba(28, 34, 40, 0) 36px),
+      linear-gradient(to top,    var(--surface-2) 0, rgba(28, 34, 40, 0) 36px);
+    pointer-events: none;
+    z-index: 2;
+  }
+}
+
+// Columns share the parent container's chrome — no per-column border
+// or background. They just provide their own scrollable item flow.
+.lac-timepicker-col {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+}
+
+.lac-timepicker-items {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  scroll-snap-type: y mandatory;
+  &::-webkit-scrollbar { display: none; }
+}
+
+.lac-timepicker-item {
+  // Defeat Obsidian theme button chrome (filled pill / box-shadow) so
+  // each wheel row reads as plain mono typography.
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 30px !important;
+  min-height: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--text-3) !important;
   -webkit-user-select: none;
   user-select: none;
-  transition: color 0.15s ease;
+  scroll-snap-align: center;
+  transition: color 0.12s ease, font-size 0.12s ease;
+  // Quiet neighbors that flank the selected row.
+  opacity: 0.55;
+  &:hover  { background: transparent !important; color: var(--text-2) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:active { background: transparent !important; }
+  &.is-selected {
+    color: var(--text-1) !important;
+    font-size: 22px;
+    font-weight: 700;
+    opacity: 1;
+  }
+}
+.lac-timepicker-unit {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 400;
+  margin-left: 2px;
 }
 
-.lf-wheel-item.selected {
-  color: $lac-text;
-  font-weight: 600;
-}
-
-/* 选中高亮带条 */
-.lf-wheel-column::before {
-  content: '';
+// `:` floats over the boundary between the two columns, vertically
+// pinned to the selected band (top: 60px, height: 30px). The colon
+// itself is sized down from the selected number (22/700) — design 27
+// reads it as a quiet typographic separator, not as a third "digit".
+// The `::before` pseudo paints a full-height hairline divider behind
+// the colon so the two columns visually split at the same axis.
+.lac-timepicker-colon {
   position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 36px;
-  background: rgba(211, 188, 141, 0.12);
-  border-top: 1px solid rgba(211, 188, 141, 0.35);
-  border-bottom: 1px solid rgba(211, 188, 141, 0.35);
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.lf-picker-actions {
+  top: 60px;
+  left: 50%;
+  height: 30px;
+  width: 12px;
+  transform: translateX(-50%);
   display: flex;
-  gap: 10px;
+  align-items: center;
   justify-content: center;
-  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-2);
+  pointer-events: none;
+  z-index: 3;             // above the ::after fade on each column
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    bottom: -60px;
+    left: 50%;
+    width: 1px;
+    background: var(--hairline);
+    transform: translateX(-50%);
+    z-index: -1;          // behind the `:` glyph in the colon element
+  }
 }
 
-.lf-picker-btn {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: none;
+// Preset pill row — 5 mono pills under the wheels. Each pill is sized to
+// its content (no flex grow) so the row stays tight and the pills don't
+// stretch into wide buttons like the previous build did.
+.lac-timepicker-presets {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 2px 0 0;
+}
+.lac-timepicker-preset {
+  // Defeat Obsidian theme button chrome — pills are typography on a
+  // hairline outline, not filled buttons. Every chrome property is
+  // reset !important so theme rules can't repaint a filled pill.
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 24px !important;
+  min-height: 0 !important;
+  padding: 0 10px !important;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 1px solid var(--hairline-strong) !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-2) !important;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.1);
-  color: $lac-text;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  font-weight: 600;
-}
+  transition: color 0.12s ease, border-color 0.12s ease;
 
-.lf-picker-btn:active {
-  transform: translateY(0) scale(0.98);
-  box-shadow: none;
+  &:hover  { background: transparent !important; color: var(--text-1) !important; border-color: rgba(237, 231, 218, 0.28) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:active { background: transparent !important; }
+  &.is-active {
+    background: transparent !important;
+    border-color: var(--plan) !important;
+    color: var(--plan) !important;
+  }
 }
-
-.lf-picker-btn:hover {
-  transform: translateY(-1px);
-}
-
-.lf-picker-modal .lf-picker-btn.lf-picker-btn-confirm {
-  background: $lac-primary;
-  color: $lac-bg;
-  border: 1px solid $lac-primary;
-}
-
-.lf-picker-modal .lf-picker-btn.lf-picker-btn-confirm:hover {
-  background: lighten($lac-primary, 5%);
-  border-color: lighten($lac-primary, 5%);
-}
-
-.lf-picker-btn.lf-picker-btn-cancel {
-  background: rgba(255, 255, 255, 0.1);
-  color: $lac-text;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.lf-picker-btn.lf-picker-btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
-  color: $lac-text !important;
-}
-
-.lf-picker-modal .lf-picker-btn.lf-picker-btn-clear {
-  background: $lac-danger;
-  color: #FFFFFF;
-  border: 1px solid $lac-danger;
-}
-
-.lf-picker-modal .lf-picker-btn.lf-picker-btn-clear:hover {
-  background: lighten($lac-danger, 5%);
-  border-color: lighten($lac-danger, 5%);
-}
-

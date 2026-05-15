@@ -1,8 +1,17 @@
 import { App, TFile, Notice } from 'obsidian';
 import * as TOML from 'toml';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const TOMLStringify: any = require('tomlify-j0.4');
-import { Roadmap, Place, RouteSegment } from '../types/roadmap';
+const TOMLStringify: { toToml: (obj: unknown) => string } = require('tomlify-j0.4');
+import { Roadmap, Place, RouteSegment, computeRoadmapEndpoints } from '../types/roadmap';
+
+/** 解析后的 TOML 头部（路线 / 地点 / 根文件共用，字段都可缺省） */
+interface ParsedTomlHeader {
+  type?: string;
+  renders?: string | string[];
+  name?: string;
+  detail?: Record<string, any>;
+  [key: string]: unknown;
+}
 
 export class RoadmapRepository {
   private app: App;
@@ -21,15 +30,39 @@ export class RoadmapRepository {
     try {
       const content = await this.app.vault.read(file);
       const header = this.extractTomlHeader(content);
-      const parsed = this.parseToml(header) || {};
-      const typeVal = String((parsed as any)['type'] ?? '').toLowerCase();
-      let renders: any = (parsed as any)['renders'];
-      if (!Array.isArray(renders)) renders = typeof renders === 'string' ? [renders] : [];
-      const hasRoadmapSet = (renders as any[]).map(v => String(v).toLowerCase()).some(s => s.includes('roadmapset'));
+      const parsed = this.parseToml(header);
+      const typeVal = String(parsed.type ?? '').toLowerCase();
+      const renders = this.normalizeRenders(parsed.renders);
+      const hasRoadmapSet = renders.some(s => s.includes('roadmapset'));
       return typeVal === 'root' && hasRoadmapSet;
-    } catch (_) {
+    } catch (e) {
+      console.warn('[RoadmapRepository] isValidEntry failed', e);
       return false;
     }
+  }
+
+  /** 检查文件是否是子路线入口（type=root 且 renders 含 roadmap） */
+  async isSubRoadmapEntry(filePath: string): Promise<boolean> {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return false;
+    try {
+      const content = await this.app.vault.read(file);
+      const header = this.extractTomlHeader(content);
+      const parsed = this.parseToml(header);
+      const typeVal = String(parsed.type ?? '').toLowerCase();
+      const renders = this.normalizeRenders(parsed.renders);
+      const hasRoadmap = renders.some(s => s.includes('roadmap'));
+      return typeVal === 'root' && hasRoadmap;
+    } catch (e) {
+      console.warn('[RoadmapRepository] isSubRoadmapEntry failed', e);
+      return false;
+    }
+  }
+
+  private normalizeRenders(value: unknown): string[] {
+    if (Array.isArray(value)) return value.map(v => String(v).toLowerCase());
+    if (typeof value === 'string') return [value.toLowerCase()];
+    return [];
   }
 
   async loadRoadmapSet(): Promise<string[]> {
@@ -44,20 +77,11 @@ export class RoadmapRepository {
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) return null;
     const content = await this.app.vault.read(file);
-    
-    console.log(`[RoadmapRepository] Loading roadmap from: ${filePath}`);
-    console.log(`[RoadmapRepository] File content:`, content);
-    
-    // 使用修复后的 quoteWikilinksForToml 方法
-    const quotedContent = this.quoteWikilinksForToml(content);
-    console.log(`[RoadmapRepository] Quoted content:`, quotedContent);
-    
-    const parsedData = this.parseToml(quotedContent);
-    console.log(`[RoadmapRepository] Parsed TOML data:`, parsedData);
-    
+
+    const header = this.extractTomlHeader(content);
+    const parsedData = this.parseToml(header);
     const { name, detail } = parsedData;
-    console.log(`[RoadmapRepository] Extracted name: ${name}, detail:`, detail);
-    
+
     const items: Array<Place | RouteSegment> = [];
     const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
@@ -69,15 +93,9 @@ export class RoadmapRepository {
         if (dest && dest instanceof TFile) {
           try {
             const pContent = await this.app.vault.read(dest);
-            console.log(`[RoadmapRepository] Loading place file: ${dest.path}`);
-            console.log(`[RoadmapRepository] Place content:`, pContent);
-            
-            const quotedPlaceContent = this.quoteWikilinksForToml(pContent);
-            console.log(`[RoadmapRepository] Quoted place content:`, quotedPlaceContent);
-            
-            const pData = this.parseToml(quotedPlaceContent) || {};
-            console.log(`[RoadmapRepository] Parsed place data:`, pData);
-            
+            const placeHeader = this.extractTomlHeader(pContent);
+            const pData = this.parseToml(placeHeader) || {};
+
             const place: Place = {
               id: dest.basename,
               name: pData.name || linkTarget,
@@ -89,23 +107,25 @@ export class RoadmapRepository {
               for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
                 const t = lines[j].trim();
                 if (t.startsWith('[[')) break; // 下一个地点开始
-                if (!t) continue;
+                if (!t) continue; // 跳过空行继续向下看
                 lookahead.push(t);
               }
               for (const la of lookahead) {
                 const ms = la.match(/^start_time\s*=\s*"([^"]+)"/);
-                if (ms) (place.detail as any).start_time = ms[1];
+                if (ms) place.detail.start_time = ms[1];
                 const me = la.match(/^end_time\s*=\s*"([^"]+)"/);
-                if (me) (place.detail as any).end_time = me[1];
+                if (me) place.detail.end_time = me[1];
                 // 若遇到 route 行也停止继续向下看
                 if (/^route\s*=\s*\{/.test(la)) break;
               }
             }
-            console.log(`[RoadmapRepository] Created place:`, place);
             items.push(place);
-            // 尝试读取下一行是否为 route = {...}
-            if (i + 1 < lines.length) {
-              const next = lines[i + 1].trim();
+            // 尝试读取后续行是否为 route = {...}（跳过空行和 time 覆盖行）
+            for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
+              const next = lines[j].trim();
+              if (!next) continue; // 跳过空行
+              if (/^(start_time|end_time)\s*=/.test(next)) continue; // 跳过时间覆盖行
+              if (next.startsWith('[[')) break; // 下一个地点
               const r = next.match(/^route\s*=\s*\{([^}]*)\}/);
               if (r) {
                 const kv = r[1];
@@ -118,12 +138,28 @@ export class RoadmapRepository {
                 });
                 if (seg.travelMode) items.push(seg as RouteSegment);
               }
+              break; // 非空非时间覆盖行处理完毕
             }
-          } catch (_) {}
+          } catch (e) {
+            console.warn(`[RoadmapRepository] Failed to load place: ${linkTarget}`, e);
+          }
         }
       }
     }
-    return { id: (file as TFile).basename, name: name || (file as TFile).basename, detail, items } as Roadmap;
+    // Compute startPoint / endPoint — first / last geocoded place in the
+    // trip. Used by the parent roadmap when this file is referenced as a
+    // sub-roadmap "place": route-segment calculation prefers the trip's
+    // entry/exit points over the wide trip-level address (e.g. "厦门"
+    // is a region; the first place is what you actually drive to).
+    const { start, end } = computeRoadmapEndpoints(items);
+    return {
+      id: (file as TFile).basename,
+      name: name || (file as TFile).basename,
+      detail,
+      items,
+      startPoint: start,
+      endPoint: end,
+    } as Roadmap;
   }
 
   // 创建路线文件并返回其路径
@@ -170,6 +206,87 @@ export class RoadmapRepository {
     return target;
   }
 
+  /**
+   * 创建嵌套子路线文件 — 用户在父路线中"添加地点"时选择 trip 选项走这条路径。
+   * 写入的文件带 `type = "root"` + `renders = ["roadmap"]` header，配合 detail 字段，
+   * body 留空（用户进入该子路线详情页后再添加 places）。
+   * 文件命名为 `{name}.md`；若已存在同名文件，返回该 TFile 不覆盖。
+   */
+  async saveSubRoadmapFile(folderPath: string, name: string, detail: any): Promise<TFile> {
+    const fileName = `${name}.md`;
+    const filePath = `${folderPath}/${fileName}`;
+    const existing = this.app.vault.getAbstractFileByPath(filePath);
+    if (existing && existing instanceof TFile) return existing;
+
+    // Header order matches the design draft (docs/draft.md): `name` first,
+    // then the marker pair, then `[detail]` table — so the file reads as a
+    // proper roadmap-typed note when opened directly.
+    const headerObj: any = {
+      name,
+      type: 'root',
+      renders: ['roadmap'],
+    };
+    if (detail && typeof detail === 'object') headerObj.detail = detail;
+    const headerToml = this.stringifyToml(headerObj);
+
+    const folder = this.app.vault.getAbstractFileByPath(folderPath);
+    if (!folder) await this.app.vault.createFolder(folderPath);
+    await this.app.vault.create(filePath, headerToml + '\n');
+    return this.app.vault.getAbstractFileByPath(filePath) as TFile;
+  }
+
+  /**
+   * 仅更新路线文件的 TOML header（name + detail），保留 body（[[...]] 与 route = {...} 行）。
+   * 若文件不存在，则作为新建文件写入（仅 header）。
+   */
+  async updateRoadmapMeta(filePath: string, name: string, detail: any): Promise<void> {
+    const headerObj: any = { name };
+    if (detail && typeof detail === 'object') headerObj.detail = detail;
+    const headerToml = this.stringifyToml(headerObj);
+
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) {
+      await this.app.vault.create(filePath, headerToml + '\n');
+      return;
+    }
+    const original = await this.app.vault.read(file);
+    const oldHeader = this.extractTomlHeader(original);
+    // body 起始位置：保留 oldHeader 之后的全部字节（包括首个 [[...]] 及其以后）
+    const body = original.slice(oldHeader.length);
+    const headerClean = headerToml.replace(/\s+$/g, '');
+    // 在 header 与 body 之间保证有一个换行分隔
+    let glue = '\n';
+    if (body.startsWith('\n')) glue = '';
+    const finalContent = headerClean + glue + body;
+    await this.app.vault.modify(file, finalContent);
+  }
+
+  /**
+   * 更新/插入/删除地点后的单条 route segment（placeIndex 指向 Place 在 items 数组中的位置）
+   * 传入的 segment 为 null 时删除。仅影响目标 route 行，不动其它 items。
+   */
+  async updateRouteSegment(
+    filePath: string,
+    placeIndex: number,
+    segment: RouteSegment | null,
+  ): Promise<void> {
+    const data = await this.loadRoadmap(filePath);
+    if (!data) return;
+    const items = [...data.items];
+    const place = items[placeIndex];
+    if (!place || !('name' in place)) return;
+    const nextIdx = placeIndex + 1;
+    const next = items[nextIdx];
+    const hasRoute = next && typeof next === 'object' && !('name' in next) && (next as RouteSegment).travelMode;
+    if (segment) {
+      if (hasRoute) items[nextIdx] = segment;
+      else items.splice(nextIdx, 0, segment);
+    } else if (hasRoute) {
+      items.splice(nextIdx, 1);
+    }
+    await this.updateRoadmapItems(filePath, data.name, data.detail || {}, items);
+  }
+
   // 重写某条路线文件的条目顺序（[[Place]] 与紧随的 route 行）
   async updateRoadmapItems(filePath: string, name: string, detail: any, items: Array<Place | RouteSegment>): Promise<void> {
     const headerObj: any = { name };
@@ -177,14 +294,14 @@ export class RoadmapRepository {
     const headerToml = this.stringifyToml(headerObj);
     const bodyLines: string[] = [];
     for (let i = 0; i < items.length; i++) {
-      const it = items[i] as any;
+      const it = items[i];
       if (it && typeof it === 'object' && 'name' in it) {
-        const id = (it as Place).id || (it as Place).name;
+        const id = it.id || it.name;
         bodyLines.push(`[[${id}]]`);
         // 如果下一项是段落，则输出 route 行
-        const next = items[i + 1] as any;
+        const next = items[i + 1];
         if (next && !('name' in next) && next.travelMode) {
-          const seg = next as RouteSegment;
+          const seg = next;
           const kv: string[] = [`travelMode = "${seg.travelMode}"`];
           if (typeof seg.distance === 'number') kv.push(`distance = ${seg.distance}`);
           if (typeof seg.duration === 'number') kv.push(`duration = ${seg.duration}`);
@@ -197,6 +314,130 @@ export class RoadmapRepository {
     const finalContent = `${headerToml}\n${bodyLines.join('\n')}${bodyLines.length ? '\n' : ''}`;
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (file && file instanceof TFile) await this.app.vault.modify(file, finalContent); else await this.app.vault.create(filePath, finalContent);
+  }
+
+  /**
+   * 仅更新地点文件（.md）本体的 TOML header 中的"通用字段"：name、description、address
+   * 不修改 start_time / end_time（这些属于路线专属的时间覆盖，写入路线文件）
+   */
+  async updatePlaceGeneric(
+    placePath: string,
+    fields: { name?: string; description?: string; address?: any },
+  ): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(placePath);
+    if (!file || !(file instanceof TFile)) return;
+    const original = await this.app.vault.read(file);
+    const oldHeader = this.extractTomlHeader(original);
+    const parsed = this.parseToml(oldHeader) || {};
+    // 合并
+    if (typeof fields.name === 'string') parsed.name = fields.name;
+    parsed.detail = parsed.detail || {};
+    if (fields.description !== undefined) {
+      if (fields.description) parsed.detail.description = fields.description;
+      else delete parsed.detail.description;
+    }
+    if (fields.address !== undefined) {
+      if (fields.address) parsed.detail.address = fields.address;
+      else delete parsed.detail.address;
+    }
+    const newHeader = this.stringifyToml(parsed);
+    const body = original.slice(oldHeader.length);
+    const headerClean = newHeader.replace(/\s+$/g, '');
+    const glue = body.startsWith('\n') ? '' : '\n';
+    await this.app.vault.modify(file, headerClean + glue + body);
+  }
+
+  /**
+   * 在路线文件中，为某个地点 wikilink 行后插入/替换"时间覆盖"行（start_time=/end_time=）
+   * - 若对应行已存在则替换
+   * - 若不存在则插入在 [[PlaceName]] 之后（route 行之前）
+   * - 若传入 null 则删除对应覆盖行
+   */
+  async updatePlaceScheduleInRoadmap(
+    roadmapPath: string,
+    placeName: string,
+    times: { start_time?: string | null; end_time?: string | null },
+  ): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(roadmapPath);
+    if (!file || !(file instanceof TFile)) return;
+    const content = await this.app.vault.read(file);
+    const lines = content.split(/\r?\n/);
+
+    // 找到目标 wikilink 行
+    let targetIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].trim().match(/^\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/);
+      if (m && m[1].trim() === placeName) { targetIdx = i; break; }
+    }
+    if (targetIdx < 0) return;
+
+    // 扫描后续行，直到下一个 [[...]] 或 route 行 —— 收集已有的 start_time/end_time 覆盖行索引
+    const overrideIdx: { start?: number; end?: number } = {};
+    let scanEnd = lines.length;
+    for (let j = targetIdx + 1; j < lines.length; j++) {
+      const t = lines[j].trim();
+      if (t.startsWith('[[')) { scanEnd = j; break; }
+      if (/^route\s*=/.test(t)) { scanEnd = j; break; }
+      if (/^start_time\s*=\s*"/.test(t)) overrideIdx.start = j;
+      else if (/^end_time\s*=\s*"/.test(t)) overrideIdx.end = j;
+    }
+
+    const applyOne = (
+      key: 'start_time' | 'end_time',
+      value: string | null | undefined,
+      existingIdx: number | undefined,
+    ) => {
+      if (value === null) {
+        // 删除
+        if (existingIdx !== undefined) {
+          lines.splice(existingIdx, 1);
+          // 修正后续索引
+          if (overrideIdx.start !== undefined && overrideIdx.start > existingIdx) overrideIdx.start--;
+          if (overrideIdx.end !== undefined && overrideIdx.end > existingIdx) overrideIdx.end--;
+          scanEnd--;
+        }
+      } else if (value !== undefined) {
+        const newLine = `${key} = "${String(value).replace(/"/g, '\\"')}"`;
+        if (existingIdx !== undefined) {
+          lines[existingIdx] = newLine;
+        } else {
+          // 插入到 targetIdx+1 之后已有覆盖行的末尾（在 scanEnd 之前）
+          let insertAt = targetIdx + 1;
+          if (overrideIdx.start !== undefined) insertAt = Math.max(insertAt, overrideIdx.start + 1);
+          if (overrideIdx.end !== undefined) insertAt = Math.max(insertAt, overrideIdx.end + 1);
+          lines.splice(insertAt, 0, newLine);
+          if (key === 'start_time') overrideIdx.start = insertAt;
+          else overrideIdx.end = insertAt;
+          if (overrideIdx.start !== undefined && overrideIdx.start >= insertAt && key !== 'start_time') overrideIdx.start++;
+          if (overrideIdx.end !== undefined && overrideIdx.end >= insertAt && key !== 'end_time') overrideIdx.end++;
+          scanEnd++;
+        }
+      }
+    };
+
+    applyOne('start_time', times.start_time, overrideIdx.start);
+    applyOne('end_time', times.end_time, overrideIdx.end);
+
+    await this.app.vault.modify(file, lines.join('\n'));
+  }
+
+  /**
+   * 查找引用某地点名的所有路线文件路径（通过扫描同目录下的 .md 中的 [[placeName]]）
+   */
+  async findRoadmapsReferencingPlace(placeName: string): Promise<string[]> {
+    const files = this.app.vault.getMarkdownFiles();
+    const results: string[] = [];
+    const pattern = new RegExp(`\\[\\[${placeName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}(\\||\\])`);
+    for (const f of files) {
+      if (f.path === this.rootFilePath) continue;
+      // 只考虑路线文件：排除 name === placeName 的地点文件本身
+      if (f.basename === placeName) continue;
+      try {
+        const content = await this.app.vault.read(f);
+        if (pattern.test(content)) results.push(f.path);
+      } catch (e) { console.warn(`[RoadmapRepository] read file failed during reference scan: ${f.path}`, e); }
+    }
+    return results;
   }
 
   // 工具：Place -> TOML 文本
@@ -214,7 +455,9 @@ export class RoadmapRepository {
       if (rootFile && rootFile instanceof TFile) {
         rootContent = await this.app.vault.read(rootFile);
       }
-    } catch (_) {}
+    } catch (e) {
+      console.warn('[RoadmapRepository] Failed to read root file', e);
+    }
     // 使用简单策略：清理旧的 [[...]]，追加新的（保留顶部 TOML 头部）
     const header = this.extractTomlHeader(rootContent);
     const rest = rootContent.slice(header.length);
@@ -225,42 +468,51 @@ export class RoadmapRepository {
     if (existingRoot && existingRoot instanceof TFile) await this.app.vault.modify(existingRoot, finalContent); else await this.app.vault.create(rootPath, finalContent);
   }
 
-  // 工具
+  /**
+   * 提取 TOML 头部：收集所有行直到遇到独立的 [[wikilink]] 行。
+   * 空行不会中断提取（TOML section 间允许空行），仅 [[...]] 行表示数据区开始。
+   */
   private extractTomlHeader(content: string): string {
     const lines = (content || '').split(/\r?\n/);
     const out: string[] = [];
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('[[')) break;
+      // 仅独立的 [[...]] wikilink 行终止 header（不匹配 TOML 的 [section]）
+      if (/^\[\[[^\]]+\]\]/.test(trimmed)) break;
       out.push(line);
     }
     return out.join('\n');
   }
 
-  private parseToml(content: string): any {
+  private parseToml(content: string): ParsedTomlHeader {
     try {
       const normalized = (content || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      return TOML.parse(normalized);
-    } catch (_) { return {}; }
+      return (TOML.parse(normalized) || {}) as ParsedTomlHeader;
+    } catch (e) {
+      console.warn('[RoadmapRepository] TOML parse error', e);
+      return {};
+    }
   }
 
   // 生成稳定 TOML 文本（扁平 + section）
-  private stringifyToml(obj: any): string {
+  private stringifyToml(obj: Record<string, unknown>): string {
     try {
       return TOMLStringify.toToml(obj);
-    } catch (_) {
+    } catch (e) {
+      console.warn('[RoadmapRepository] TOML stringify failed, using fallback', e);
       // 回退极简渲染
       const lines: string[] = [];
       if (obj && typeof obj === 'object') {
         if (obj.name) lines.push(`name = "${String(obj.name).replace(/"/g, '\\"')}"`);
         Object.keys(obj).forEach(k => {
           if (k === 'name') return;
-          const v = (obj as any)[k];
+          const v = obj[k];
           if (v && typeof v === 'object' && !Array.isArray(v)) {
             lines.push('');
             lines.push(`[${k}]`);
-            Object.keys(v).forEach(sk => {
-              const sv = (v as any)[sk];
+            const subObj = v as Record<string, unknown>;
+            Object.keys(subObj).forEach(sk => {
+              const sv = subObj[sk];
               if (typeof sv === 'number') lines.push(`${sk} = ${sv}`);
               else lines.push(`${sk} = "${String(sv ?? '').replace(/"/g, '\\"')}"`);
             });
@@ -270,14 +522,4 @@ export class RoadmapRepository {
       return lines.join('\n') + '\n';
     }
   }
-
-  private quoteWikilinksForToml(content: string): string {
-    const normalized = (content || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    return normalized.replace(/\[\[([^\]]+)\]\]/g, (match: string, linkText: string) => {
-      // 将 [[xxx]] 转换成 [["xxx"]]
-      return `[["${linkText}"]]`;
-    });
-  }
 }
-
-

@@ -1,36 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Roadmap, Place } from '../types/roadmap';
-
-function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0,0,0,0); return x; }
-function startOfWeekMonday(d: Date): Date { const x = startOfDay(d); const day = x.getDay(); const offset = (day + 6) % 7; x.setDate(x.getDate() - offset); return x; }
-function endOfWeekSunday(d: Date): Date { const s = startOfWeekMonday(d); s.setDate(s.getDate() + 6); return s; }
-function formatYMD(d: Date): string { const y=d.getFullYear(); const m=`${d.getMonth()+1}`.padStart(2,'0'); const da=`${d.getDate()}`.padStart(2,'0'); return `${y}-${m}-${da}`; }
-function parseDateOrNull(s?: string): Date | null {
-  if (!s) return null;
-  const raw = s.trim();
-  // Support 1-2 digit month/day and optional time with space or T separator
-  const m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/);
-  if (m) {
-    const y = Number(m[1]);
-    const mo = Math.max(1, Math.min(12, Number(m[2]))) - 1;
-    const da = Math.max(1, Math.min(31, Number(m[3])));
-    const hh = m[4] ? Number(m[4]) : 0;
-    const mi = m[5] ? Number(m[5]) : 0;
-    const ss = m[6] ? Number(m[6]) : 0;
-    const d = new Date(y, mo, da, hh, mi, ss);
-    if (!isNaN(d.getTime())) return d;
-  }
-  // Fallback: try replacing space with T and letting Date parse
-  let iso = raw;
-  if (iso.indexOf(' ') > 0 && iso.indexOf('T') === -1) iso = iso.replace(' ', 'T');
-  const t = new Date(iso);
-  if (!isNaN(t.getTime())) return t;
-  return null;
-}
+import { startOfDay, endOfWeekSunday, formatYMD, parseDateOrNull } from '../utils/date';
+import { isPlace } from '../utils/typeGuards';
 
 export function buildDailyCounts(roadmap: Roadmap): Record<string, number> {
   const map: Record<string, number> = {};
-  const places = (roadmap.items || []).filter(it => 'name' in it) as Place[];
+  const places = (roadmap.items || []).filter(isPlace) as Place[];
   for (const p of places) {
     const ds = p.detail?.start_time || p.detail?.end_time;
     const d = parseDateOrNull(ds);
@@ -69,19 +44,17 @@ export default function CardCalendar({ roadmap, globalCounts, globalRangeDays }:
   const localCounts = useMemo(() => buildDailyCounts(roadmap), [roadmap]);
   const counts = useMemo(() => ({ ...globalCounts, ...localCounts }), [globalCounts, localCounts]);
 
-  // color mapping per requirement: 0 gray, 1 green -> 6 yellow, 6 -> 11 red
-  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
-  const toHex2 = (n: number) => n.toString(16).padStart(2, '0');
-  const rgbToHex = (r: number, g: number, b: number) => `#${toHex2(r)}${toHex2(g)}${toHex2(b)}`;
-  const GREEN: [number, number, number] = [0, 255, 0];
-  const YELLOW: [number, number, number] = [255, 255, 0];
-  const RED: [number, number, number] = [255, 0, 0];
-  const GRAY: string = '#4b4b4b';
+  // Monochromatic gold density — 5 levels keyed by place-count buckets.
+  // Reads CSS custom properties (--heat-1..5) so theme-time colour changes
+  // flow through without rebuilding the SVG. Out-of-range / in-range-empty
+  // are signalled by --heat-bg / --heat-empty respectively.
   const getColorForCount = (cnt: number): string => {
-    if (cnt <= 0) return GRAY;
-    if (cnt >= 11) return '#ff0000';
-    if (cnt <= 6) { const t = (cnt - 1) / 5; return rgbToHex(lerp(GREEN[0], YELLOW[0], t), lerp(GREEN[1], YELLOW[1], t), lerp(GREEN[2], YELLOW[2], t)); }
-    const t = (cnt - 6) / 5; return rgbToHex(lerp(YELLOW[0], RED[0], t), lerp(YELLOW[1], RED[1], t), lerp(YELLOW[2], RED[2], t));
+    if (cnt <= 0) return 'var(--heat-empty)';
+    if (cnt >= 5) return 'var(--heat-5)';
+    if (cnt >= 4) return 'var(--heat-4)';
+    if (cnt >= 3) return 'var(--heat-3)';
+    if (cnt >= 2) return 'var(--heat-2)';
+    return 'var(--heat-1)';
   };
 
   const today = startOfDay(new Date());
@@ -117,20 +90,16 @@ export default function CardCalendar({ roadmap, globalCounts, globalRangeDays }:
 
     const cnt = counts[key] || 0;
     let fill: string;
-    let opacity = 1.0;
     if (cnt > 0) {
       fill = getColorForCount(cnt);
-      opacity = 1.0;
     } else if (globalRangeDays[key]) {
       // 有路线区间但无地点
-      fill = '#4b4b4b';
-      opacity = 1.0;
+      fill = 'var(--heat-empty)';
     } else {
-      // 无路线区间且无地点：黑灰底（较低不透明度）
-      fill = '#000000';
-      opacity = 0.10;
+      // 无路线区间且无地点
+      fill = 'var(--heat-bg)';
     }
-    rects.push({ x, y, fill, opacity, key });
+    rects.push({ x, y, fill, opacity: 1, key });
   }
 
   return (

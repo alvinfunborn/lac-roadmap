@@ -1,7 +1,16 @@
 @use 'variables' as *;
+@use 'sass:color';
 
-// 地图选择器遮罩层 - 与弹窗遮罩一致
-.lf-map-selector-mask {
+// ─────────────────────────────────────────────────────────────────────────
+// MapSelector — hero map fills the modal; everything else overlays.
+// See docs/design/image copy 8.png.
+//   • topbar (title + provider dropdown)
+//   • overlay panel (search input + frosted results list)
+//   • center crosshair + selection ring
+//   • bottom-left coord chip, bottom-right scale bar
+//   • bottom action row (clear · cancel · pin here)
+// ─────────────────────────────────────────────────────────────────────────
+.lac-map-selector-mask {
   position: fixed;
   inset: 0;
   background: $lac-mask;
@@ -11,322 +20,562 @@
   z-index: 10000;
 }
 
-// 地图选择器主体 - 使用 $lac-card 背景，参考弹窗风格
-.lf-map-selector {
+.lac-map-selector {
   position: relative;
-  width: 90vw;
-  height: 75vh;
-  background: $lac-card;
-  border-radius: 16px;
+  width: 92vw;
+  max-width: 880px;
+  height: 78vh;
+  max-height: 640px;
+  background: var(--ink);
+  border-radius: var(--r-12);
   overflow: hidden;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--hairline);
+  font-family: var(--sans);
 }
 
-.lf-map-background {
+.lac-map-background {
+  position: absolute;
+  inset: 0;
+}
+.lac-map-canvas {
   position: absolute;
   inset: 0;
 }
 
-.lf-map-canvas {
-  position: absolute;
-  inset: 0;
-}
-
-.lf-map-top-controls {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 10;
-}
-
-// 搜索框容器 - 与 lac-lifeflow 插件一致
-.lf-map-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-// 搜索输入框 - 与 lac-lifeflow 插件一致
-.lf-map-search-input {
-  width: 100%;
-  height: 40px;
-  padding: 0 44px 0 16px;
-  font-size: 14px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: #FFFFFF;
-  color: #1a1a1a;
-  outline: none;
-  transition: border-color 0.2s ease;
-  position: relative;
-  z-index: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  
-  &:focus {
-    border-color: #FFB612;
-    box-shadow: 0 0 0 2px rgba(255, 182, 18, 0.1);
-  }
-  
-  &::placeholder {
-    color: #999;
-  }
-}
-
-// 搜索按钮 - 与 lac-lifeflow 插件一致（绝对定位在输入框内）
-.lf-map-search-btn {
-  position: absolute !important;
-  left: auto !important;
-  right: 0 !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  width: 32px !important;
-  height: 32px !important;
-  padding: 0 !important;
-  border: none !important;
-  border-radius: 6px !important;
-  background: transparent !important;
-  color: #666 !important;
-  cursor: pointer !important;
-  transition: all 0.2s ease !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  z-index: 1 !important;
-  pointer-events: auto !important;
-  font-size: 0 !important; /* 隐藏文字内容 */
-
-  /* 搜索图标 SVG */
-  &::before {
-    content: '';
-    display: block;
-    width: 16px;
-    height: 16px;
-    background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-  }
-  
-  &:hover:not(:disabled) {
-    background: #f0f0f0 !important;
-    color: #333 !important;
-    transform: translateY(-50%) translateY(-1px) !important;
-
-    &::before {
-      background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
-    }
-  }
-  
-  &:active:not(:disabled) {
-    transform: translateY(-50%) scale(0.98) !important;
-  }
-  
-  &:disabled {
-    background: transparent !important;
-    cursor: not-allowed !important;
-    color: #ccc !important;
-    transform: translateY(-50%) !important;
-
-    &::before {
-      background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
-    }
-  }
-  
-  // 加载状态下隐藏图标，显示 spinner
-  &.lf-map-search-btn-loading::before {
-    display: none;
-  }
-  
-  // 加载状态下的 spinner
-  .lf-map-search-btn-spinner {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(0, 0, 0, 0.2);
-    border-top-color: rgba(0, 0, 0, 0.8);
-    border-radius: 50%;
-    animation: lf-map-search-spin 0.8s linear infinite;
-    flex-shrink: 0;
-  }
-}
-
-// 搜索按钮加载动画
-.lf-map-search-btn-spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.2);
-  border-top-color: rgba(0, 0, 0, 0.8);
-  border-radius: 50%;
-  animation: lf-map-search-spin 0.8s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes lf-map-search-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-// 搜索结果样式 - 与 lac-lifeflow 插件一致
-.lf-map-search-results {
-  position: relative;
-  margin-top: 2px;
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: #FFFFFF;
-  z-index: 10;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 0;
-  margin: 2px 0 0 0;
-  
-  // 隐藏滚动条但保持滚动功能
-  -ms-overflow-style: none; // IE and Edge
-  
-  &::-webkit-scrollbar {
-    display: none; // Chrome, Safari, Opera
-  }
-}
-
-// 搜索结果项 - 与 lac-lifeflow 插件一致
-.lf-map-search-result {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0;
-  
-  &:last-child {
-    border-bottom: none;
-  }
-  
-  &:hover {
-    background: #f8f9fa;
-  }
-}
-
-.lf-map-search-result-number {
-  background: #dc3545;
-  color: white;
-  font-size: 16px;
-  font-weight: bold;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease;
-  
-  &.lf-map-search-result-highlight {
-    transform: scale(1.2);
-    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.6);
-  }
-}
-
-.lf-map-search-result-content {
-  flex: 1;
-  min-width: 0;
-}
-
-// 搜索结果文本样式 - 与 lac-lifeflow 插件一致
-.lf-map-search-result-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 4px;
-}
-
-.lf-map-search-result-address {
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 2px;
-}
-
-.lf-map-search-result-distance {
-  font-size: 11px;
-  color: #999;
-}
-
-// 搜索错误提示样式 - 与 lac-lifeflow 一致
-.lf-map-search-error {
-  padding: 8px 12px;
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  border-radius: 6px;
-  color: #ff4d4f;
-  font-size: 12px;
-  margin-top: 8px;
-}
-
-// 清除按钮的 X 图标 - 与 lac-lifeflow 插件一致
-.lf-map-clear-btn::before {
-  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
-}
-
-.lf-map-clear-btn:hover:not(:disabled)::before {
-  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
-}
-
-.lf-map-clear-btn:disabled::before {
-  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>') !important;
-}
-
-// 地图加载状态样式
-.lf-map-loading {
+// Top bar — edge-to-edge strip pinned to the modal's top. Holds the
+// `PIN` mono eyebrow + search input on the left + provider dropdown on
+// the right. Matches docs/design/image copy 31.png — flush with the
+// modal edge, hairline bottom separating from the search results /
+// map below.
+//
+// Background is FULLY opaque (var(--ink)) so the modal's 12px rounded
+// corners don't show map content bleeding through the corners.
+.lac-map-topbar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  z-index: 12;
   display: flex;
   align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  height: 46px;
+  box-sizing: border-box;
+  background: var(--ink);
+  border-bottom: 1px solid var(--hairline);
+}
+.lac-map-topbar-eyebrow {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+// Provider dropdown trigger — compact mono label + status dot + ▾ caret.
+// Inside the topbar so no frosted backdrop of its own.
+.lac-map-provider {
+  position: relative;
+  flex-shrink: 0;
+}
+.lac-map-provider-trigger {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px !important;
+  min-height: 0 !important;
+  padding: 0 10px !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 1px solid var(--hairline-strong) !important;
+  border-radius: var(--r-8) !important;
+  box-shadow: none !important;
+  box-sizing: border-box;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-1) !important;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  &:hover { background: var(--surface-2) !important; border-color: rgba(237, 231, 218, 0.28) !important; }
+  &:focus { outline: none; box-shadow: none !important; }
+}
+.lac-map-provider-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--plan);
+  box-shadow: 0 0 0 2px rgba(211, 188, 141, 0.18);
+}
+.lac-map-provider-label { color: var(--text-1); }
+.lac-map-provider-caret { color: var(--text-3); font-size: 9px; }
+
+// Menu — two-line rows (name + WGS84·global / GCJ-02·CN meta).
+.lac-map-provider-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  padding: 6px;
+  background: rgba(21, 27, 32, 0.92);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-8);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lac-map-provider-menuitem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+  &:hover { background: var(--surface-2); }
+  &.is-active { background: rgba(211, 188, 141, 0.10); }
+}
+.lac-map-provider-menuitem-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text-1);
+}
+.lac-map-provider-menuitem-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+// Search row — lives inside the topbar, flex-grows to fill the middle.
+// Quiet hairline-bordered pill with a magnify icon prefix; mirrors the
+// `pin [🔍 …]` field in image 23.
+.lac-map-search-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-8);
+  padding: 0 8px;
+  height: 30px;
+  box-sizing: border-box;
+}
+.lac-map-search-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  z-index: 10;
-  border-radius: 16px;
+  color: var(--text-3);
+  width: 14px;
+  height: 14px;
+}
+.lac-map-overlay-search-input {
+  // Defeat Obsidian theme `<input>` chrome — themes paint a filled
+  // rounded background + min-height + box-shadow on form fields which
+  // shows as a nested pill inside our search row (image 30 issue).
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  flex: 1;
+  min-width: 0;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 4px !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text-1) !important;
+  &::placeholder { color: var(--text-4); }
+  &:focus { outline: none !important; box-shadow: none !important; }
+}
+.lac-map-overlay-search-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 22px !important;
+  height: 22px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  color: var(--text-3) !important;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s ease;
+  &:hover:not(:disabled) { background: transparent !important; color: var(--text-1) !important; }
+  &:disabled { color: var(--text-4) !important; cursor: not-allowed; }
+  &:focus { outline: none; box-shadow: none !important; }
 }
 
-.lf-map-loading-text {
-  color: $lac-text;
-  font-size: 14px;
-  padding: 12px 24px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 8px;
+// Search dropdown — edge-to-edge directly under the topbar, NOT a
+// floating card. Each result row uses a hairline bottom rule so the
+// list reads as one continuous tape (image 23). Backdrop-blurred so
+// the map underneath stays faintly visible.
+.lac-map-search-dropdown {
+  position: absolute;
+  top: 46px;            // matches topbar height (8+8+30)
+  left: 0;
+  right: 0;
+  z-index: 11;
+  background: rgba(14, 19, 22, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--hairline);
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 }
 
-// 地图标记编号样式
-.lf-map-marker-number {
-  background: $lac-primary;
-  color: $lac-bg;
-  font-size: 12px;
-  font-weight: bold;
+// Error toast (inline, under the search row).
+.lac-map-overlay-error {
+  padding: 8px 14px;
+  background: rgba(182, 84, 84, 0.10);
+  border-bottom: 1px solid rgba(182, 84, 84, 0.30);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--danger);
+}
+
+// Results list — hairline-separated rows, edge-to-edge inside the
+// dropdown strip (no rounded card, no margins).
+.lac-map-overlay-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.lac-map-search-result {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px !important;
+  margin: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--hairline) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+  &:hover  { background: var(--surface-2) !important; }
+  &:focus  { outline: none; box-shadow: none !important; }
+  &:last-child { border-bottom: 0 !important; }
+  &.is-active {
+    background: rgba(211, 188, 141, 0.08) !important;
+  }
+}
+
+.lac-map-search-result-number {
+  flex-shrink: 0;
   width: 22px;
-  height: 22px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+  transition: color 0.2s ease;
+  &.lac-map-search-result-highlight {
+    color: var(--plan);
+  }
+}
+
+.lac-map-search-result-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lac-map-search-result-name {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lac-map-search-result-address {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lac-map-search-result-check {
+  flex-shrink: 0;
+  color: var(--plan);
+  font-size: 12px;
+  padding-top: 2px;
+}
+
+// Center crosshair + selection ring — click map = pin here.
+.lac-map-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  z-index: 8;
+  pointer-events: none;
+}
+.lac-map-crosshair-ring {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--plan);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(14, 19, 22, 0.6);
+}
+.lac-map-crosshair-h, .lac-map-crosshair-v {
+  position: absolute;
+  background: var(--plan);
+  box-shadow: 0 0 0 1px rgba(14, 19, 22, 0.6);
+}
+.lac-map-crosshair-h {
+  left: 50%; top: 50%;
+  width: 14px; height: 1px;
+  margin: -0.5px 0 0 -7px;
+}
+.lac-map-crosshair-v {
+  left: 50%; top: 50%;
+  width: 1px; height: 14px;
+  margin: -7px 0 0 -0.5px;
+}
+
+// Bottom-left coord chip — gold status dot + mono lat·lng·system
+// readout (image 23). Sits just above the bottom bar.
+.lac-map-coord-chip {
+  position: absolute;
+  bottom: 60px;
+  left: 14px;
+  z-index: 11;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(14, 19, 22, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.lac-map-coord-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--plan);
+  box-shadow: 0 0 0 2px rgba(211, 188, 141, 0.18);
+}
+
+// Bottom-right scale bar — hairline tick + mono label. Visual hint only.
+.lac-map-scalebar {
+  position: absolute;
+  bottom: 60px;
+  right: 12px;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  pointer-events: none;
+}
+.lac-map-scalebar-line {
+  width: 48px;
+  height: 1px;
+  background: var(--text-2);
+  position: relative;
+  &::before, &::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    width: 1px;
+    height: 4px;
+    background: var(--text-2);
+  }
+  &::before { left: 0; }
+  &::after  { right: 0; }
+}
+.lac-map-scalebar-label { color: var(--text-2); }
+
+// Bottom action bar — edge-to-edge strip pinned to the modal's bottom.
+// Matches docs/design/image copy 16-17.png — no margin, hairline top
+// separates it from the map. `clear` (danger left) ‧ spacer ‧ `cancel`
+// hairline ‧ `pin here` filled gold.
+.lac-map-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(14, 19, 22, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--hairline);
+}
+.lac-map-bottom-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 32px !important;
+  min-height: 0 !important;
+  padding: 0 14px !important;
+  border-radius: 6px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--text-2) !important;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  &:hover { background: transparent !important; color: var(--text-1) !important; }
+  &:focus { outline: none; box-shadow: none !important; }
+}
+.lac-map-bottom-btn--quiet {
+  margin-right: auto;
+  // Quiet text-3 grey, not danger red — image 23 shows CLEAR as a
+  // neutral mono link, with the only red being save/destructive
+  // confirmations.
+  color: var(--text-3) !important;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  &:hover { color: var(--text-1) !important; }
+}
+.lac-map-bottom-btn--cancel {
+  border-color: var(--hairline-strong) !important;
+  &:hover { background: var(--surface-2) !important; }
+}
+.lac-map-bottom-btn--confirm {
+  background: var(--plan) !important;
+  color: var(--ink) !important;
+  border-color: var(--plan) !important;
+  font-weight: 600;
+  &:hover { background: color.adjust(#D3BC8D, $lightness: 5%) !important; color: var(--ink) !important; }
+}
+
+// Disabled / loading state — reuses the diagonal-stripe `MAP` chrome. The
+// loading text becomes the secondary line under the label so the cause of
+// the empty state stays visible without breaking the design language.
+.lac-map-loading {
+  @include lac-map-fallback;
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  gap: 8px;
+  &::before {
+    content: 'MAP';
+    @include lac-map-fallback-label(14px, 0.28em);
+  }
+}
+.lac-map-loading-text {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 0 18px;
+  max-width: 280px;
+}
+
+// 地图标记编号样式 — design: 18px 金色圆章 + 1.5px ink 描边 + 黑金数字。
+// 在 .lac-aggmap-canvas 的 saturate(0.55) 滤镜下也能保住识别度。
+// 默认 plan 配色；--done / --wish 由调用方按地点状态切换。
+.lac-map-marker-number {
+  background: var(--plan);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  border: 1.5px solid var(--ink);
+  box-shadow: 0 0 0 1px rgba(211, 188, 141, 0.45), 0 2px 6px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+
+  &--done {
+    background: var(--done);
+    box-shadow: 0 0 0 1px rgba(179, 153, 93, 0.45), 0 2px 6px rgba(0, 0, 0, 0.45);
+  }
+  &--plan {
+    background: var(--plan);
+    box-shadow: 0 0 0 1px rgba(211, 188, 141, 0.45), 0 2px 6px rgba(0, 0, 0, 0.45);
+  }
+  &--wish {
+    background: var(--wish);
+    color: var(--text-1);
+    box-shadow: 0 0 0 1px rgba(199, 122, 74, 0.45), 0 2px 6px rgba(0, 0, 0, 0.45);
+  }
+}
+
+// 地图圆点标记 — wishlist 橙 + 光晕，set 页面里取代默认的红点。
+// 单一配色，不按状态着色（密集散布作为一个整体读，不当 legend 用）。
+.lac-map-marker-circle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--wish);
+  box-shadow: 0 0 0 2px rgba(199, 122, 74, 0.35), 0 0 0 4px rgba(199, 122, 74, 0.15);
+  box-sizing: border-box;
 }
 
 // 地图标记样式
-.lf-map-marker {
+.lac-map-marker {
   background: transparent;
   color: $lac-primary;
   font-size: 20px;
@@ -335,113 +584,5 @@
   justify-content: center;
   padding-bottom: 0;
   margin-bottom: -5px;
-}
-
-.lf-map-bottom-controls {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  display: flex;
-  gap: 8px;
-  z-index: 10;
-}
-
-// 地图选择器内的按钮样式 - 与弹窗按钮完全一致
-.lf-map-selector .lf-btn {
-  height: 30px;
-  padding: 0 16px;
-  border-radius: $lac-radius-8;
-  border: none;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.1);
-  color: $lac-text;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  font-weight: 600;
-  font-size: 14px;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-appearance: none;
-  appearance: none;
-  
-  &:hover {
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0) scale(0.98);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  }
-}
-
-// 确定按钮样式
-.lf-map-selector .lf-btn-confirm {
-  background: $lac-primary;
-  color: $lac-bg;
-  border: 1px solid $lac-primary;
-  
-  &:hover {
-    background: lighten($lac-primary, 5%);
-    border-color: lighten($lac-primary, 5%);
-  }
-}
-
-// 取消按钮样式 - 使用 ID 选择器确保最高优先级，解决移动端样式覆盖问题
-#lf-map-cancel-btn.lf-btn-cancel,
-.lf-map-selector .lf-btn.lf-btn-cancel {
-  // 基础样式
-  height: 30px !important;
-  padding: 0 16px !important;
-  border-radius: $lac-radius-8 !important;
-  cursor: pointer !important;
-  font-weight: 600 !important;
-  font-size: 14px !important;
-  line-height: 30px !important;
-  text-align: center !important;
-  display: inline-block !important;
-  box-sizing: border-box !important;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease !important;
-  margin: 0 !important;
-  
-  // 颜色样式 - 确保覆盖所有可能的样式
-  // 使用 mix 函数混合背景色和白色，模拟弹窗按钮在深色背景上的效果，同时保证在地图上的可见性
-  background: mix(#fff, $lac-card, 10%) !important; 
-  background-color: mix(#fff, $lac-card, 10%) !important;
-  background-image: none !important; // 防止背景图覆盖
-  color: $lac-text !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  border-width: 1px !important;
-  border-style: solid !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
-  outline: none !important;
-  -webkit-appearance: none !important;
-  appearance: none !important;
-  
-  &:hover,
-  &:focus,
-  &:focus-visible {
-    // hover 时稍微变亮，与弹窗按钮交互一致 (mix 15%)
-    background: mix(#fff, $lac-card, 15%) !important;
-    background-color: mix(#fff, $lac-card, 15%) !important;
-    border-color: rgba(255, 255, 255, 0.3) !important;
-    color: $lac-text !important;
-    outline: none !important;
-    transform: translateY(-1px) !important;
-  }
-  
-  &:active {
-    // active 时恢复或略微变化
-    background: mix(#fff, $lac-card, 10%) !important;
-    background-color: mix(#fff, $lac-card, 10%) !important;
-    color: $lac-text !important;
-    border-color: rgba(255, 255, 255, 0.2) !important;
-    transform: translateY(0) scale(0.98) !important;
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0) !important;
-  }
 }
 

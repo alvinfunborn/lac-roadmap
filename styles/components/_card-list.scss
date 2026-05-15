@@ -3,7 +3,52 @@
 .lac-card-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 0 0 12px;
 }
 
+// Route chip — pill that hangs on the timeline spine in the trip detail
+// view. Replaces the old `.lac-route-badge` connector-line + text pair.
+// Class name kept as `.lac-route-badge` so RouteBadge.tsx callers (and the
+// Sortable `data-no-drag` carve-out) keep matching.
+.lac-route-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  user-select: none;
+  white-space: nowrap;
+
+  // The first segment word (travel mode) gets a subtle gold tint — same
+  // affordance the design uses on the artboard.
+  .lac-route-badge-mode { color: var(--plan); }
+  .lac-route-badge-sep  { color: var(--text-4); }
+}
+.lac-route-badge--clickable {
+  cursor: pointer;
+  &:hover { color: var(--text-2); border-color: var(--hairline-strong); }
+}
+
+// "+ transit" 占位 — 在两个 place 之间没有 RouteSegment 的位置渲染。
+// dashed 边框 + 透明背景区分实际 segment chip 与"未填"的 affordance；
+// 文字也更安静一些，跟 dashed 边框一起读作"待填"。
+.lac-route-badge--add {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-4);
+  .lac-route-badge-mode {
+    color: var(--text-3);
+  }
+  &.lac-route-badge--clickable:hover {
+    color: var(--text-2);
+    border-color: var(--hairline-strong);
+    .lac-route-badge-mode { color: var(--text-1); }
+  }
+}

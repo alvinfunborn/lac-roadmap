@@ -23,6 +23,15 @@ export interface MapSelectorProps {
   placeholder?: string;
   settings: any;
   updateSettings?: (newSettings: Partial<any>) => Promise<void>;
+  /** Context overlay: existing route places rendered as numbered markers
+   *  + connecting polyline so the user can see the trip layout while
+   *  picking a new location. */
+  routeLocations?: MapLocation[];
+  /** 只读查看模式 —— 同样的 mask + map chrome，但去掉所有编辑入口：
+   *  搜索栏、map-click 拾取、clear / pin-here、坐标 chip。底栏只剩 close。
+   *  Route overlay (`routeLocations`) 照常渲染，所以这是「点开缩略图看
+   *  全景」的最便宜路径。 */
+  readOnly?: boolean;
 }
 
 

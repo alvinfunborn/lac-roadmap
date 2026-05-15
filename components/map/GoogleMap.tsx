@@ -68,57 +68,74 @@ export class CoordinateConverter {
   }
 }
 
-// 地图API加载器
-export const loadGoogleMapsAPI = (apiKey?: string, language?: 'zh' | 'en', timeout: number = 30000): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    if (window.google && window.google.maps) {
-      console.log('[GoogleMapsAPI] Google Maps API already loaded');
-      resolve(window.google.maps);
-      return;
-    }
-    if (!apiKey) {
-      reject(new Error('Google Maps API key is required'));
-      return;
-    }
+// 地图API加载器 - 单例加载，避免多组件并发时重复注入脚本导致 "Element already defined" / "__googleMapsCallback is not a function"
+let _loadPromise: Promise<any> | null = null;
 
-    console.log(`[GoogleMapsAPI] Starting to load Google Maps API (timeout: ${timeout}ms)`);
-    let timeoutId: NodeJS.Timeout | null = null;
+export const loadGoogleMapsAPI = (apiKey?: string, language?: 'zh' | 'en', timeout: number = 30000): Promise<any> => {
+  if (typeof window !== 'undefined' && window.google && window.google.maps) {
+    return Promise.resolve(window.google.maps);
+  }
+  if (_loadPromise) {
+    return _loadPromise;
+  }
+  if (!apiKey) {
+    return Promise.reject(new Error('Google Maps API key is required'));
+  }
+
+  // 若已有脚本在加载中（如快速切换页面导致前次未完成），等待其完成，避免重复注入
+  const existing = typeof document !== 'undefined' && document.querySelector('script[src*="maps.googleapis.com"]');
+  if (existing) {
+    _loadPromise = new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeout;
+      const check = () => {
+        if (window.google?.maps) {
+          _loadPromise = null;
+          resolve(window.google.maps);
+          return;
+        }
+        if (Date.now() > deadline) {
+          _loadPromise = null;
+          reject(new Error(`Google Maps API loading timeout (${timeout}ms)`));
+          return;
+        }
+        setTimeout(check, 80);
+      };
+      check();
+    });
+    return _loadPromise;
+  }
+
+  _loadPromise = new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let script: HTMLScriptElement | null = null;
-    let callbackName: string | null = null;
+    const callbackName = '__googleMapsCallback';
+    // 动态全局回调槽位（JSONP 风格的 Google Maps 加载约定）
+    const winSlots = window as unknown as Record<string, unknown>;
 
     const cleanup = () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
-      if (callbackName && (window as any)[callbackName]) {
-        delete (window as any)[callbackName];
+      if (winSlots[callbackName]) {
+        delete winSlots[callbackName];
       }
-      if (script && script.parentNode) {
+      if (script?.parentNode) {
         script.parentNode.removeChild(script);
       }
-    };
-
-    const onTimeout = () => {
-      cleanup();
-      reject(new Error(`Google Maps API loading timeout (${timeout}ms) - 请检查网络连接和 VPN 代理设置，确保 googleapis.com 已正确代理`));
-    };
-
-    const onError = () => {
-      cleanup();
-      reject(new Error('Failed to load Google Maps API script - 请检查网络连接和 VPN 代理设置，确保 googleapis.com 已正确代理'));
+      _loadPromise = null;
     };
 
     const onSuccess = () => {
-      console.log('[GoogleMapsAPI] Google Maps API loaded successfully');
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
-      if (callbackName && (window as any)[callbackName]) {
-        delete (window as any)[callbackName];
+      if (winSlots[callbackName]) {
+        delete winSlots[callbackName];
       }
-      if (window.google && window.google.maps) {
+      _loadPromise = null;
+      if (window.google?.maps) {
         resolve(window.google.maps);
       } else {
         reject(new Error('Google Maps API failed to load'));
@@ -127,22 +144,24 @@ export const loadGoogleMapsAPI = (apiKey?: string, language?: 'zh' | 'en', timeo
 
     script = document.createElement('script');
     const lang = language === 'zh' ? 'zh-CN' : 'en';
-    callbackName = '__googleMapsCallback';
-    // 移除 loading=async 参数，因为它可能导致加载时间更长
     const apiUrl = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${callbackName}&libraries=marker,places&language=${lang}`;
     script.src = apiUrl;
     script.async = true;
     script.defer = true;
     script.crossOrigin = 'anonymous';
-
-    console.log(`[GoogleMapsAPI] Loading script from: ${apiUrl.replace(apiKey, '***')}`);
-    (window as any)[callbackName] = onSuccess;
-    script.onerror = onError;
-
-    timeoutId = setTimeout(onTimeout, timeout);
-
+    winSlots[callbackName] = onSuccess;
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Failed to load Google Maps API script'));
+    };
+    timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Google Maps API loading timeout (${timeout}ms)`));
+    }, timeout);
     document.head.appendChild(script);
   });
+
+  return _loadPromise;
 };
 
 // 使用新的 Places API (searchByText) 搜索地点
@@ -155,7 +174,7 @@ export const searchPlacesByGoogleAPI = async (keyword: string, apiKey: string, m
     if (!window.google || !window.google.maps) {
       await loadGoogleMapsAPI(apiKey);
     }
-    const { Place } = await (window.google!.maps as any).importLibrary('places');
+    const { Place } = await window.google!.maps.importLibrary('places');
     const request: any = {
       textQuery: trimmed,
       fields: ['displayName', 'formattedAddress', 'location'],
@@ -227,10 +246,15 @@ export const getAddressByCoordinates = async (lng: number, lat: number, apiKey: 
               }
             }
           }
+          // No POI / establishment / premise found — fall back to the
+          // full `formatted_address` as the display name. The previous
+          // heuristic took the first comma-split chunk, which on Google
+          // results often resolves to just a building number ("68",
+          // "5-1") and leaves the MapSelector echo unreadable. Showing
+          // the whole formatted address is always more informative than
+          // a stripped-down fragment.
           if (!name && result.formatted_address) {
-            const parts = result.formatted_address.split(',');
-            const firstPart = parts[0]?.trim() || '';
-            if (firstPart && !/^\d+$/.test(firstPart) && firstPart.length > 2) name = firstPart; else if (parts.length > 1) name = parts[1]?.trim() || firstPart; else name = firstPart;
+            name = result.formatted_address;
           }
           resolve({ longitude: lng, latitude: lat, name: name || '选中位置', address: result.formatted_address || '', coordinate_system: 'WGS84' });
         } else {
@@ -238,7 +262,8 @@ export const getAddressByCoordinates = async (lng: number, lat: number, apiKey: 
         }
       });
     });
-  } catch (_) {
+  } catch (e) {
+    console.warn('[GoogleMap.getAddressByCoordinates] failed', e);
     return null;
   }
 };
@@ -260,7 +285,8 @@ export const getCurrentLocationByIP = async (): Promise<MapLocation | null> => {
         { timeout: 5000, maximumAge: 0 }
       );
     });
-  } catch (_) {
+  } catch (e) {
+    console.warn('[GoogleMap.getCurrentLocationByIP] failed', e);
     return null;
   }
 };

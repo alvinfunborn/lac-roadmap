@@ -1,0 +1,101 @@
+// Typography atoms — mirror of docs/design/tokens.css.
+// Used together with _variables.scss CSS custom properties.
+
+@use 'variables' as *;
+
+// Stage helper — applied to the root container of redesigned screens.
+.lac-stage {
+  background: var(--ink);
+  color: var(--text-1);
+  font-family: var(--sans);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+}
+
+// Reusable atoms
+.lac-mono  { font-family: var(--mono);  font-variant-numeric: tabular-nums; }
+.lac-serif { font-family: var(--serif); font-feature-settings: "ss01"; }
+
+.lac-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+// Status dot — paired with serif title in cards / list rows. Sized to read
+// at the same optical weight as the 17px serif beside it; a hairline ring
+// keeps the dot visible against the warm-ink surface even at low DPR.
+.lac-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  min-width: 8px;        // guard against ancestor flex shrinking it to 0
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}
+.lac-dot--done { background: var(--done); box-shadow: 0 0 0 2px rgba(179, 153, 93, 0.18); }
+.lac-dot--plan { background: var(--plan); box-shadow: 0 0 0 2px rgba(211, 188, 141, 0.22); }
+.lac-dot--wish { background: var(--wish); box-shadow: 0 0 0 2px rgba(199, 122, 74, 0.18); }
+// Legacy state-class aliases so existing helpers (getPlaceStatusColor returns
+// `lac-todo` / `lac-na`) keep working without churn. Phase F maps callers to
+// the new tokens and these aliases go away.
+.lac-dot--todo { @extend .lac-dot--plan; }
+.lac-dot--na   { @extend .lac-dot--wish; }
+
+// Hairlines
+.lac-hr           { height: 1px; background: var(--hairline);        border: 0; margin: 0; }
+.lac-hr--strong   { background: var(--hairline-strong); }
+
+// Card surface — supersedes the old .lac-card chrome. New components use
+// .lac-card2 directly; .lac-card itself is restyled in _card.scss to match.
+.lac-card2 {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-12);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+// Subtle striped placeholder for missing imagery (small map thumbs, etc.)
+.lac-placeholder {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(179, 153, 93, 0.08) 0 6px,
+      rgba(179, 153, 93, 0.02) 6px 12px
+    ),
+    var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+// Single-line typographic stat strip — replaces the 5-up dashboard cards.
+// Numbers are emphasised via --text-1, units/separators recede via --text-3/4.
+.lac-stats-line {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  .lac-stats-num   { color: var(--text-1); }
+  .lac-stats-unit  { color: var(--text-4); }
+  .lac-stats-sep   { color: var(--text-4); }
+
+  // status-tinted variants for the trip-list summary line
+  .lac-stats-done  { color: var(--done); }
+  .lac-stats-plan  { color: var(--plan); }
+  .lac-stats-wish  { color: var(--wish); }
+}

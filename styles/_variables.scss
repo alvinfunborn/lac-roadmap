@@ -1,34 +1,125 @@
-$lac-bg: #000;
-$lac-card: #23262F;
-// $lac-card: #4b4b4b;
-// 49
-$lac-done: #b3995d;
-$lac-todo: #d3bc8d;
-$lac-na: #FF8200;
-$lac-danger: #aa0000;
-$lac-primary: #d3bc8d;
-$lac-text: #fff;
+// LaC.Roadmap — Field Journal redesign tokens
+// Mirror of docs/design/tokens.css. CSS custom properties live on `:root`
+// so runtime JS (e.g. CardCalendar's heatmap) can read them via getComputedStyle.
+
+// Redeclare on our page roots too so the field-journal palette wins over
+// Obsidian themes that override --text-1 / --surface-N on body or .theme-dark
+// (those selectors sit closer in the cascade than `:root` and would otherwise
+// strip our warm-ink colours, leaving cards looking colourless).
+:root,
+.lac-roadmap-root,
+.lac-roadmapset-root {
+  // Surfaces — warm ink, not cold teal
+  --ink: #0E1316;
+  --surface-1: #151B20;       // primary card
+  --surface-2: #1C2228;       // elevated card / focused
+  --surface-3: #232A30;       // hover
+  --hairline: rgba(237, 231, 218, 0.07);
+  --hairline-strong: rgba(237, 231, 218, 0.14);
+
+  // Text — warm parchment whites
+  --text-1: #ECE4D4;          // headings
+  --text-2: #B5AD9C;          // body
+  --text-3: #807868;          // meta
+  --text-4: #574F42;          // faint
+
+  // Brand state colors
+  --done: #B3995D;            // gold (kept)
+  --plan: #D3BC8D;            // light gold (kept)
+  --wish: #C77A4A;            // toned-down terracotta (was #FF8200)
+  --danger: #B65454;
+
+  // Heatmap — monochromatic gold density (replaces green→yellow→red rainbow).
+  // Low tiers nudged up so the lowest bucket still reads against
+  // `--surface-1`; the design's "subtle" intent holds. empty/bg alphas
+  // raised again so the calendar band is visibly drawn even when most
+  // days are out-of-range (otherwise the strip looked blank).
+  --heat-0: rgba(179, 153, 93, 0.00);
+  --heat-1: rgba(179, 153, 93, 0.30);
+  --heat-2: rgba(179, 153, 93, 0.45);
+  --heat-3: rgba(179, 153, 93, 0.60);
+  --heat-4: rgba(179, 153, 93, 0.78);
+  --heat-5: rgba(179, 153, 93, 0.95);
+  --heat-empty: rgba(237, 231, 218, 0.14); // in-range but no place
+  --heat-bg:    rgba(237, 231, 218, 0.06);  // out-of-range
+
+  // Type
+  --serif: "Newsreader", "Source Serif 4", Georgia, serif;
+  --sans:  "Geist", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono:  "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+
+  // Radii / shadows
+  --r-4: 4px;
+  --r-8: 8px;
+  --r-12: 12px;
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -12px rgba(0,0,0,0.5);
+
+  // Legacy CSS-var aliases used by CardCalendar (kept for back-compat)
+  --lac-done: var(--done);
+  --lac-todo: var(--plan);
+}
+
+// Legacy SCSS variable aliases. New rules SHOULD use `var(--…)` directly;
+// these aliases keep unmigrated rules compiling during the redesign rollout.
+// Phase F removes any that are no longer referenced.
+$lac-bg:      #0E1316;            // was #101820
+$lac-card:    #151B20;            // was #4b4b4b
+$lac-done:    #B3995D;
+$lac-todo:    #D3BC8D;
+$lac-na:      #C77A4A;            // was #FF8200
+$lac-danger:  #B65454;            // was #aa0000
+$lac-primary: #D3BC8D;
+$lac-text:    #ECE4D4;            // was #fff
 
 // spacing & radii
-$lac-radius-6: 6px;
-$lac-radius-8: 8px;
+$lac-radius-6:  6px;
+$lac-radius-8:  8px;
 $lac-radius-10: 10px;
 
 // gaps
-$lac-gap-6: 6px;
-$lac-gap-8: 8px;
+$lac-gap-6:  6px;
+$lac-gap-8:  8px;
 $lac-gap-10: 10px;
 $lac-gap-12: 12px;
 $lac-gap-16: 16px;
 
 // elevation & masks
-$lac-shadow-1: 0 2px 8px rgba(0, 0, 0, 0.15);
+$lac-shadow-1: 0 2px 8px  rgba(0, 0, 0, 0.15);
 $lac-shadow-2: 0 6px 18px rgba(0, 0, 0, 0.25);
-$lac-mask: rgba(0, 0, 0, 0.6);
+$lac-mask:     rgba(0, 0, 0, 0.6);
 
-// CSS variables exposed for runtime usage (heatmap colors)
-:root {
-  --lac-done: #{$lac-done};
-  --lac-todo: #{$lac-todo};
+// ─────────────────────────────────────────────────────────────────────────
+// Map fallback recipe (see docs/design/image copy 9.png).
+// Dark surface + 45° hairline diagonal stripes + centered mono `MAP` label.
+// Applied to every "no map available" surface so the design language reads
+// as one piece across the card thumbnail, the trip hero map, the
+// MapSelector empty state, and the PlaceEditModal where-thumb.
+//
+// `@include lac-map-fallback` paints the chrome; callers choose their own
+// size (square thumb / full hero / inset overlay) and stack a label or
+// secondary text inside via flex-column.
+@mixin lac-map-fallback {
+  background-color: var(--surface-2);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(237, 231, 218, 0.04) 0,
+    rgba(237, 231, 218, 0.04) 6px,
+    rgba(237, 231, 218, 0.10) 6px,
+    rgba(237, 231, 218, 0.10) 12px
+  );
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
 }
 
+@mixin lac-map-fallback-label($size: 10px, $tracking: 0.22em) {
+  font-family: var(--mono);
+  font-size: $size;
+  letter-spacing: $tracking;
+  text-transform: uppercase;
+  color: var(--text-2);
+}

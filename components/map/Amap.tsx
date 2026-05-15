@@ -27,14 +27,14 @@ export class CoordinateConverter {
       } else {
         return [lng, lat];
       }
-    } catch (_) { return [lng, lat]; }
+    } catch (e) { console.warn('[Amap.convertToGcj02] fallback to original', e); return [lng, lat]; }
   }
 }
 
 export const loadAMapAPI = (apiKey?: string, language?: 'zh' | 'en'): Promise<any> => {
   return new Promise((resolve, reject) => {
-    if ((window as any).AMap) {
-      resolve((window as any).AMap);
+    if (window.AMap) {
+      resolve(window.AMap);
       return;
     }
     const script = document.createElement('script');
@@ -43,7 +43,7 @@ export const loadAMapAPI = (apiKey?: string, language?: 'zh' | 'en'): Promise<an
     script.async = true;
     script.crossOrigin = 'anonymous';
     script.onload = () => {
-      if ((window as any).AMap) resolve((window as any).AMap); else reject(new Error('AMap API failed to load'));
+      if (window.AMap) resolve(window.AMap); else reject(new Error('AMap API failed to load'));
     };
     script.onerror = () => reject(new Error('Failed to load AMap API script'));
     document.head.appendChild(script);
@@ -65,7 +65,7 @@ export const searchPlacesByWebAPI = async (keyword: string, apiKey: string): Pro
       }));
     }
     return [];
-  } catch (_) { return []; }
+  } catch (e) { console.warn('[Amap.searchPlacesByWebAPI] failed', e); return []; }
 };
 
 export const getAddressByCoordinates = async (lng: number, lat: number, apiKey: string): Promise<MapLocation | null> => {
@@ -75,13 +75,19 @@ export const getAddressByCoordinates = async (lng: number, lat: number, apiKey: 
     if (data.status === '1' && data.regeocode) {
       const regeocode = data.regeocode;
       const addressComponent = regeocode.addressComponent;
-      let name = '';
-      if (regeocode.pois && regeocode.pois.length > 0) name = regeocode.pois[0].name; else if (regeocode.roads && regeocode.roads.length > 0) name = regeocode.roads[0].name; else name = `${addressComponent.district || ''}${addressComponent.township || ''}`;
       const address = regeocode.formatted_address || `${addressComponent.province || ''}${addressComponent.city || ''}${addressComponent.district || ''}${addressComponent.township || ''}${addressComponent.neighborhood?.name || ''}`;
+      // When no POI / road is matched, fall back to the full address —
+      // the previous fallback used just `district + township` which felt
+      // too coarse for the MapSelector click echo. Mirrors the same
+      // change applied to GoogleMap.tsx.
+      let name = '';
+      if (regeocode.pois && regeocode.pois.length > 0) name = regeocode.pois[0].name;
+      else if (regeocode.roads && regeocode.roads.length > 0) name = regeocode.roads[0].name;
+      else name = address;
       return { longitude: lng, latitude: lat, name: name || '选中位置', address, coordinate_system: 'GCJ-02' };
     }
     return null;
-  } catch (_) { return null; }
+  } catch (e) { console.warn('[Amap.getAddressByCoordinates] failed', e); return null; }
 };
 
 

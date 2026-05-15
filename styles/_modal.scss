@@ -1,7 +1,8 @@
 @use 'variables' as *;
+@use 'sass:color';
 
-// 弹窗遮罩层
-.lifeflow-confirm-mask {
+// 弹窗遮罩层 — backdrop with subtle blur to lift the modal off busy maps.
+.lac-confirm-mask {
   position: fixed;
   inset: 0;
   background: $lac-mask;
@@ -11,180 +12,258 @@
   z-index: 10000;
 }
 
-// 弹窗主体 - 参考 lac-lifeflow 风格，使用 $lac-card 背景
-.lifeflow-confirm-modal {
-  background: $lac-card;
-  color: $lac-text;
-  border-radius: 16px;
+// 弹窗主体 — warm ink surface, hairline border, soft elevation.
+.lac-confirm-modal {
+  background: var(--surface-1);
+  color: var(--text-1);
+  border-radius: var(--r-12);
   min-width: 280px;
   width: 90vw;
   max-width: 380px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--hairline);
+  font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-weight: 500;
 }
 
-.lifeflow-confirm-content {
-  padding: 18px 22px;
+.lac-confirm-content {
+  padding: 18px 22px 16px;
 }
 
-.lifeflow-confirm-title {
+// Header: eyebrow + serif title (used by edit modals). Kept compatible
+// with simpler `.lac-confirm-title` callers (ConfirmModal still renders a
+// single line) — the eyebrow is rendered only when the modal supplies it.
+.lac-confirm-eyebrow {
+  margin-bottom: 6px;
+}
+
+.lac-confirm-title {
   font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  text-align: center;
-  color: $lac-text;
+  font-weight: 600;
+  margin: 0 0 12px;
+  text-align: left;
+  color: var(--text-1);
+}
+.lac-confirm-title-serif {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+  color: var(--text-1);
 }
 
-.lifeflow-confirm-message {
-  color: $lac-text;
+.lac-confirm-message {
+  color: var(--text-2);
   line-height: 1.6;
   padding: 6px 0 14px;
-  font-weight: 500;
-  opacity: 0.9;
+  font-weight: 400;
 }
 
-.lifeflow-confirm-actions {
+// ─────────────────────────────────────────────────────────────────────────
+// Action row
+// danger left (margin-right:auto pushes cancel/save right); cancel/save
+// hug the trailing edge. Single mono uppercase button language.
+// ─────────────────────────────────────────────────────────────────────────
+.lac-confirm-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 6px;
-}
-
-// 弹窗内按钮样式 - 参考 lac-lifeflow 风格，适配暗色主题
-.lifeflow-confirm-modal .lf-btn {
-  height: 30px;
-  padding: 0 16px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.1);
-  color: $lac-text;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  font-weight: 600;
-}
-
-.lifeflow-confirm-modal .lf-btn:hover {
-  transform: translateY(-1px);
-}
-
-.lifeflow-confirm-modal .lf-btn:active {
-  transform: translateY(0) scale(0.98);
-  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-}
-
-.lifeflow-confirm-modal .lf-btn-confirm {
-  background: $lac-primary;
-  color: $lac-bg;
-  border: 1px solid $lac-primary;
-}
-
-.lifeflow-confirm-modal .lf-btn-confirm:hover {
-  background: lighten($lac-primary, 5%);
-  border-color: lighten($lac-primary, 5%);
-}
-
-.lifeflow-confirm-modal .lf-btn-confirm.danger {
-  background: $lac-danger;
-  color: #FFFFFF;
-  border-color: $lac-danger;
-}
-
-.lifeflow-confirm-modal .lf-btn-confirm.danger:hover {
-  background: lighten($lac-danger, 5%);
-  border-color: lighten($lac-danger, 5%);
-}
-
-// 取消按钮样式 - 使用更具体的选择器避免被覆盖
-.lifeflow-confirm-modal .lf-btn.lf-btn-cancel {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: $lac-text !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-.lifeflow-confirm-modal .lf-btn.lf-btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
-  color: $lac-text !important;
-}
-
-// 表单网格布局 - 参考 lac-lifeflow 风格
-.lifeflow-confirm-modal .form-grid {
-  display: grid;
-  grid-template-columns: 72px 1fr;
   align-items: center;
-  row-gap: 8px;
-  column-gap: 10px;
-  max-width: 560px;
-  margin: 0 auto;
-}
-
-.lifeflow-confirm-modal .form-grid label {
-  text-align: right;
-  color: $lac-text;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-// 弹窗内输入框样式 - 适配暗色主题
-.lifeflow-confirm-modal input[type="text"],
-.lifeflow-confirm-modal textarea {
-  height: 38px;
-  padding: 8px 14px;
-  font-size: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  color: $lac-text;
-}
-
-.lifeflow-confirm-modal textarea {
-  min-height: 84px;
-}
-
-.lifeflow-confirm-modal .lf-input-error {
-  border-color: #dc3545 !important;
-}
-
-.lifeflow-confirm-modal .lf-field-error {
-  grid-column: 2/3;
-  color: #dc3545;
-  font-size: 10px;
-  margin-top: -6px;
-}
-
-// 时间输入组样式
-.lifeflow-confirm-modal .lf-time-input-group {
-  display: flex;
   gap: 8px;
+  margin-top: 6px;
+
+  // The :has() rule lets a delete-button push cancel/save to the right
+  // without React-side wrapper changes. Falls back to flex-end on
+  // browsers without :has() (cancel/save still group naturally).
+  .lac-btn-danger { margin-right: auto; }
+}
+.lac-confirm-actions--centered {
+  justify-content: center;
+  margin-top: 18px;
+}
+.lac-confirm-actions--centered:has(.lac-btn-danger) {
+  justify-content: flex-start;
 }
 
-.lifeflow-confirm-modal .lf-time-input {
-  flex: 1;
-}
-
-// 地址输入组样式
-.lifeflow-confirm-modal .lf-address-input-group {
-  width: 100%;
-}
-
-.lifeflow-confirm-modal .lf-address-input {
-  width: 100%;
-  height: 38px;
+// Buttons — mono lowercase with track-letter-spacing, picking up the
+// field-journal "save" / "cancel" / "delete" feel.
+.lac-confirm-modal .lac-btn {
+  height: auto;
   padding: 8px 14px;
+  border-radius: var(--r-8);
+  border: 1px solid var(--hairline-strong);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.lac-confirm-modal .lac-btn:hover { color: var(--text-1); border-color: var(--hairline-strong); background: var(--surface-2); }
+.lac-confirm-modal .lac-btn:active { transform: translateY(1px); }
+
+.lac-confirm-modal .lac-btn-confirm {
+  background: var(--plan);
+  border-color: var(--plan);
+  color: var(--ink);
+  font-weight: 600;
+  &:hover { background: color.adjust(#D3BC8D, $lightness: 5%); border-color: color.adjust(#D3BC8D, $lightness: 5%); color: var(--ink); }
+}
+.lac-confirm-modal .lac-btn-confirm.danger,
+.lac-confirm-modal .lac-btn-danger {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  padding: 8px 0;
+  letter-spacing: 0.12em;
+  &:hover { background: transparent; color: color.adjust(#B65454, $lightness: 8%); }
+}
+.lac-confirm-modal .lac-btn.lac-btn-cancel {
+  background: transparent !important;
+  color: var(--text-2) !important;
+  border: 1px solid var(--hairline-strong) !important;
+  &:hover { background: var(--surface-2) !important; color: var(--text-1) !important; border-color: var(--hairline-strong) !important; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Form grid — single column, eyebrow labels above hairline inputs.
+// ─────────────────────────────────────────────────────────────────────────
+.lac-confirm-modal .form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  max-width: none;
+}
+.lac-confirm-modal .form-grid > label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  text-align: left;
+  // Pull each label closer to the input that follows it; the flex `gap`
+  // still applies between label/input pairs (≈10px effective).
+  margin-bottom: -10px;
+}
+
+// Text inputs — bottom hairline, transparent body, serif body type.
+.lac-confirm-modal input[type="text"],
+.lac-confirm-modal .lac-address-input {
+  height: auto;
+  padding: 6px 0;
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--text-1);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--hairline-strong);
+  border-radius: 0;
+  outline: none;
+
+  &::placeholder { color: var(--text-4); font-style: italic; }
+  &:focus { border-bottom-color: var(--plan); }
+}
+
+// Description textarea keeps a boxed silhouette but with the warm hairline
+// and italic serif body — reads as a "notes" field.
+.lac-confirm-modal textarea {
+  min-height: 84px;
+  padding: 10px;
+  font-family: var(--serif);
+  font-style: italic;
   font-size: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  color: $lac-text;
-  cursor: pointer;
+  color: var(--text-1);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-8);
+  outline: none;
+  resize: vertical;
+
+  &::placeholder { color: var(--text-4); }
+  &:focus { border-color: var(--hairline-strong); }
 }
 
-.lifeflow-confirm-modal .lf-address-input-clickable {
-  cursor: pointer;
+.lac-confirm-modal .lac-input-error,
+.lac-confirm-modal .lac-input-error:focus { border-bottom-color: var(--danger) !important; border-color: var(--danger) !important; }
+
+.lac-confirm-modal .lac-field-error {
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: 10px;
+  margin-top: -8px;
+  letter-spacing: 0.04em;
 }
 
+// Time input pair — readonly inputs that open the pickers. Mono numerals.
+.lac-confirm-modal .lac-time-input-group {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.lac-confirm-modal .lac-time-input,
+.lac-confirm-modal input[type="text"].lac-time-input {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--text-1);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+
+  &::placeholder { color: var(--text-4); font-style: normal; }
+}
+
+// Address row stays full-width.
+.lac-confirm-modal .lac-address-input-group { width: 100%; }
+.lac-confirm-modal .lac-address-input-clickable { cursor: pointer; }
+
+// Number inputs (route segment distance/duration/tolls) match the
+// hairline-bottom text inputs but with mono numerals.
+.lac-confirm-modal input[type="number"] {
+  height: auto;
+  padding: 6px 0;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--text-1);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--hairline-strong);
+  border-radius: 0;
+  outline: none;
+  appearance: textfield;
+
+  &::placeholder { color: var(--text-4); }
+  &:focus { border-bottom-color: var(--plan); }
+}
+
+// <select> — used for travel-mode and map_provider. Match the hairline
+// silhouette of text inputs.
+.lac-confirm-modal .lac-select,
+.lac-confirm-modal select {
+  height: auto;
+  padding: 6px 24px 6px 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-1);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--hairline-strong);
+  border-radius: 0;
+  outline: none;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 6px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+
+  option { background: var(--surface-1); color: var(--text-1); }
+  &:focus { border-bottom-color: var(--plan); }
+}

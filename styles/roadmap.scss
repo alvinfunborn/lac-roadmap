@@ -1,4 +1,5 @@
 @use 'variables' as *;
+@use 'typography';
 @use 'utilities';
 @use 'buttons';
 @use 'map';
@@ -8,8 +9,10 @@
 @use 'components/card-list';
 @use 'components/card-calendar';
 @use 'components/tabs';
+@use 'components/drag-feedback';
 @use 'components/edit-modal';
 @use 'components/map-widget';
+@use 'components/stats';
 @use 'pages/roadmap-page';
 @use 'pages/roadmapset-page';
 
@@ -19,8 +22,9 @@
 }
 
 .lac-roadmap-root {
-  color: $lac-text;
-  background: $lac-bg;
+  color: var(--text-1);
+  background: var(--ink);
+  font-family: var(--sans);
 }
 
 // component and page partials provide concrete styles
