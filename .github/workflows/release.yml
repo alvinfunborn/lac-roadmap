@@ -1,0 +1,73 @@
+name: Release
+
+# Triggered by pushing a `vX.Y.Z` tag. Builds the plugin and creates a
+# published GitHub Release with `main.js` / `manifest.json` / `styles.css`
+# attached as assets so BRAT (Beta Reviewers Auto-update Tester) can pick
+# them up. BRAT polls `latest` (or any tagged release) and downloads those
+# three files into the user's vault under `.obsidian/plugins/<plugin-id>/`.
+#
+# Release flow:
+#   1. Bump manifest.json + versions.json + package.json (use `npm version
+#      patch|minor|major` which runs `version-bump.mjs` automatically).
+#   2. `git push && git push --tags` to push the commit + the new tag.
+#   3. This workflow fires on the tag push, builds, and publishes the release.
+#
+# To install via BRAT in Obsidian:
+#   1. Install BRAT from Community Plugins.
+#   2. BRAT settings → "Add Beta plugin" → enter `alvinfunborn/lac-roadmap`.
+#   3. BRAT pulls the latest release's assets into `.obsidian/plugins/lac-roadmap`.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches manifest version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          if [ "$TAG" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag v$TAG does not match manifest.json version $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "Releasing v$TAG (manifest matches)"
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build artefacts
+        run: |
+          for f in main.js manifest.json styles.css; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Build artefact missing: $f"
+              exit 1
+            fi
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Install via [BRAT](https://github.com/TfTHacker/obsidian42-brat) — add \`alvinfunborn/lac-roadmap\` as a beta plugin. See [docs/PROGRESS.md](docs/PROGRESS.md) for changes." \
+            main.js manifest.json styles.css
