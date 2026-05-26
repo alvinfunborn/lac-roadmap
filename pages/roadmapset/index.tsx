@@ -411,6 +411,10 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
       ghostClass: 'lac-sortable-ghost',
       chosenClass: 'lac-sortable-chosen',
       dragClass: 'lac-sortable-drag',
+      // 移动端长按再拖（参见 usePlaceDragDrop 同样配置的原因）。
+      delay: 500,
+      delayOnTouchOnly: true,
+      touchStartThreshold: 5,
       // 只允许放在另一张 compact 卡片旁——eyebrow / planned 卡片不是 compact，
       // 自动拒绝为放置目标，防止越过未安排区边界。
       onMove: (evt: { related: HTMLElement }) =>

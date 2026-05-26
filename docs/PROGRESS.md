@@ -128,6 +128,10 @@
 - 用户 Vault 数据一致性问题（§8.2.3 / §8.2.6）属于数据治理，不在代码范围（Wave 1 已修当时存在的重复 `[[秋叶原]]`）
 - 路径规划失败时的离线 fallback（当前为 Notice 提示，后续可考虑用直线距离作为默认值）
 
+## v1.4.1 — 移动端长按再拖（2026-05-27）
+
+`pages/roadmap/hooks/usePlaceDragDrop.ts` 与 `pages/roadmapset/index.tsx` 两处 Sortable.js 配置加 `delay: 500` + `delayOnTouchOnly: true` + `touchStartThreshold: 5`。修复：移动端手指一碰卡片就进入拖拽态、整页滚动被吃掉。鼠标侧仍然即触即拖；触摸侧必须长按 500ms 才开始拖拽，长按期间出现 ≥5px 滑动直接放弃拖拽走滚动；短按继续走 onClick 打开编辑。
+
 ## Wave 8 — 移除导出 + wishlist 视觉差异 + 同名/拖拽 bug 修（v1.4.0，2026-05-26）
 
 ### 移除导出功能

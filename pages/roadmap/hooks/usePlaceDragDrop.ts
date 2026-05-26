@@ -308,6 +308,12 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
       ghostClass: 'lac-sortable-ghost',
       chosenClass: 'lac-sortable-chosen',
       dragClass: 'lac-sortable-drag',
+      // 移动端必须长按再拖，否则手指一碰卡片就进入拖拽态、整页滚动被吃掉。
+      // delayOnTouchOnly 让鼠标侧仍是即触即拖；touchStartThreshold 在长按
+      // 计时期间出现 ≥5px 滑动直接放弃拖拽，让浏览器接管滚动。
+      delay: 500,
+      delayOnTouchOnly: true,
+      touchStartThreshold: 5,
       onStart: (evt: { item: HTMLElement }) => {
         const idx = evt.item.getAttribute('data-place-index');
         dragIndexRef.current = idx != null ? parseInt(idx, 10) : null;
