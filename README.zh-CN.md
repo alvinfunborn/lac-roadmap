@@ -16,7 +16,6 @@ Life as Code - Roadmap 是一个 Obsidian 旅行路线规划 / 记录插件。�
 - **聚合地图**：每页顶部 hero 地图；点击展开为可平移缩放的只读地图查看器
 - **递归结构**：地点文件可同时是子路线入口（`type = "root"`, `renders = ["roadmap"]`），允许"行程套行程"
 - **地点复用**：同一地点文件可被多条路线引用，通用字段（name / description / address）写入地点文件，每条路线的专属时间作为覆盖行写入路线文件
-- **导出**：纯文本行程单、Markdown（贴回 Obsidian）、`.ics`（日历导入）、`.gpx`（GPS / 户外 app）
 - **拖拽**：日内排序、跨标签拖拽改日、自动重算受影响的路线段
 
 ### 🗺️ 双地图提供商
@@ -173,13 +172,6 @@ LaC/Roadmap/
 ### 5. Hero 地图
 行程 / 行程列表页顶部的地图是预览态。点击展开为完整的只读地图查看器，可任意平移缩放查看 marker。Hero 之所以做成预览态而非直接交互，是因为 warm-ink 视觉处理（filter + mix-blend-mode 组合）在 Chromium 下不能正确传递指针事件——详见 `docs/PROGRESS.md` 的取舍记录。
 
-### 6. 导出
-行程详情页底部的 `↓ EXPORT` 菜单提供四种格式：
-- **Copy plain text** — 纯文本行程单。
-- **Copy markdown** — 可贴回 Obsidian 的 Markdown，附统计表格。
-- **Download .ics** — 日历事件文件（可导入 Google Calendar / Apple Calendar / Outlook）。
-- **Download .gpx** — GPS 交换格式，供户外 app 使用（GCJ-02 自动转 WGS84）。
-
 ## 技术实现
 
 - 基于 Obsidian Plugin API 做文件操作和视图注册。
@@ -201,10 +193,9 @@ LaC/Roadmap/
   - `RoadmapHeader` — 返回按钮 + serif 标题 + 统计 + hero 地图。
   - `DayTabsStrip` — 三层 mono day tabs + 长按拖拽排序。
   - `Timeline` — 脊柱 + 编号圆 + 地点卡片 + 路线段药丸。
-  - `RoadmapActions` — `+ add place / + add trip / ↓ export` 菜单。
+  - `RoadmapActions` — `+ add place / + add trip` 操作行。
 - `RoadmapRepository` — TOML 解析、地点 CRUD、子路线识别、路线段写入。
 - `RouteCalculationService` — Google Directions / 高德 路径规划封装。
-- `RoadmapExportService` — 纯文本 / Markdown / ICS / GPX 导出。
 - `MapSelector` — 全屏地图弹窗（既可交互选址，也可只读查看）。
 - `AggregatedMap` — Hero 地图小部件，带 warm-ink 滤镜和悬浮装饰。
 

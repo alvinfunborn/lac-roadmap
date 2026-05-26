@@ -5,6 +5,7 @@ import DatePicker from '../DatePicker';
 import TimePicker from '../TimePicker';
 import PlaceStaticMap from '../PlaceStaticMap';
 import { extractDateFromTime, extractTimeFromDateTime, validateTimeFormat, validateTimeRange } from '../../utils/timeValidation';
+import { t } from '../../i18n';
 
 interface Props {
   visible: boolean;
@@ -29,9 +30,16 @@ interface Props {
    *  to MapSelector so the trip's other pins / connecting polyline show
    *  as visual context while the user picks an address. */
   routeLocations?: MapLocation[];
+  /** 父路线 detail.map_provider —— 优先于全局 settings.mapApiProvider，
+   *  让"trip 选了高德"时这条 trip 内新增/编辑地点的地图选择器与缩略图都
+   *  用高德，不会被全局默认的 Google 抢走。 */
+  preferredProvider?: 'gaode' | 'google';
+  /** 打开日期选择器时，没有现成日期的回退落点（YYYY-MM-DD）—— 用 trip 的
+   *  start_time 让用户不用从今天往后翻几年；不影响 picker 的清空/取消行为。 */
+  defaultPickerDate?: string;
 }
 
-export default function PlaceEditModal({ visible, initial, settings, onCancel, onConfirm, onDelete, routeLocations }: Props) {
+export default function PlaceEditModal({ visible, initial, settings, onCancel, onConfirm, onDelete, routeLocations, preferredProvider, defaultPickerDate }: Props) {
   const [name, setName] = useState(initial?.name || '');
   const [start, setStart] = useState(initial?.start_time || '');
   const [end, setEnd] = useState(initial?.end_time || '');
@@ -62,14 +70,14 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
     } else if (field === 'start_time') {
       setStart(value);
       if (value && !validateTimeFormat(value)) {
-        setTimeError('时间格式无效');
+        setTimeError(t('modal.place.timeInvalid'));
       } else {
         setTimeError('');
       }
     } else if (field === 'end_time') {
       setEnd(value);
       if (value && !validateTimeFormat(value)) {
-        setTimeError('时间格式无效');
+        setTimeError(t('modal.place.timeInvalid'));
       } else {
         setTimeError('');
       }
@@ -116,25 +124,23 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
 
   const handleSave = () => {
     if (!name.trim()) {
-      setNameError('名称不能为空');
+      setNameError(t('modal.common.nameRequired'));
       return;
     }
     setNameError('');
 
-    // 验证时间格式
     if (start && !validateTimeFormat(start)) {
-      setTimeError('开始时间格式无效');
+      setTimeError(t('modal.place.startTimeInvalid'));
       return;
     }
     if (end && !validateTimeFormat(end)) {
-      setTimeError('结束时间格式无效');
+      setTimeError(t('modal.place.endTimeInvalid'));
       return;
     }
 
-    // 验证时间范围
     const timeRangeValidation = validateTimeRange(start, end);
     if (!timeRangeValidation.valid) {
-      setTimeError(timeRangeValidation.error || '时间范围无效');
+      setTimeError(timeRangeValidation.error || t('modal.place.timeRangeInvalid'));
       return;
     }
 
@@ -157,21 +163,21 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
       <div className="lac-confirm-modal lac-place-edit-modal" onClick={(e) => e.stopPropagation()}>
         <div className="lac-confirm-content">
           <div className="lac-confirm-eyebrow lac-eyebrow">
-            {initial?.name ? 'edit place' : 'new place'}
+            {initial?.name ? t('modal.place.edit.eyebrow') : t('modal.place.create.eyebrow')}
           </div>
           <h2 className="lac-confirm-title-serif lac-serif">
-            {initial?.name || name || '新地点'}
+            {initial?.name || name || t('modal.place.defaultTitle')}
           </h2>
           <div className="lac-place-form">
             {/* NAME */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">name</span>
+                <span className="lac-eyebrow">{t('modal.place.section.name')}</span>
               </div>
               <input
                 type="text"
                 value={name}
-                placeholder="地点名称"
+                placeholder={t('modal.place.placeholder.name')}
                 className={`lac-place-name-input${nameError ? ' lac-input-error' : ''}`}
                 onChange={(e) => { setNameError(''); handleInputChange('name', e.target.value); }}
               />
@@ -181,21 +187,21 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
             {/* WHEN — single line, date + bold time → date + bold time */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">when</span>
+                <span className="lac-eyebrow">{t('modal.place.section.when')}</span>
               </div>
               <div className="lac-place-when-row">
                 <button type="button" className="lac-place-when-date" onClick={() => openDatePicker('start')}>
-                  {extractDateFromTime(start) || <span className="lac-place-when-placeholder">日期</span>}
+                  {extractDateFromTime(start) || <span className="lac-place-when-placeholder">{t('modal.place.placeholder.date')}</span>}
                 </button>
                 <button type="button" className="lac-place-when-time" onClick={() => openTimePicker('start')}>
-                  {extractTimeFromDateTime(start) || <span className="lac-place-when-placeholder">--:--</span>}
+                  {extractTimeFromDateTime(start) || <span className="lac-place-when-placeholder">{t('modal.place.placeholder.time')}</span>}
                 </button>
                 <span className="lac-place-when-arrow">→</span>
                 <button type="button" className="lac-place-when-date" onClick={() => openDatePicker('end')}>
-                  {extractDateFromTime(end) || <span className="lac-place-when-placeholder">日期</span>}
+                  {extractDateFromTime(end) || <span className="lac-place-when-placeholder">{t('modal.place.placeholder.date')}</span>}
                 </button>
                 <button type="button" className="lac-place-when-time" onClick={() => openTimePicker('end')}>
-                  {extractTimeFromDateTime(end) || <span className="lac-place-when-placeholder">--:--</span>}
+                  {extractTimeFromDateTime(end) || <span className="lac-place-when-placeholder">{t('modal.place.placeholder.time')}</span>}
                 </button>
               </div>
               {timeError && <div className="lac-field-error">{timeError}</div>}
@@ -204,7 +210,7 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
             {/* WHERE — address + coords on the left, MAP thumb on the right */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">where</span>
+                <span className="lac-eyebrow">{t('modal.place.section.where')}</span>
                 {coordHint && <span className="lac-place-where-hint">{coordHint}</span>}
               </div>
               <div className="lac-place-where-row">
@@ -214,14 +220,14 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
                       type="text"
                       value={address?.name || ''}
                       onChange={(e) => setAddress(e.target.value ? { name: e.target.value } : undefined)}
-                      placeholder="地址"
+                      placeholder={t('modal.place.placeholder.address')}
                       className="lac-place-where-input"
                     />
                   ) : (
                     <input
                       type="text"
                       value={address?.name || ''}
-                      placeholder="点击选择地址"
+                      placeholder={t('modal.place.placeholder.addressClick')}
                       readOnly
                       onClick={() => setPickerVisible(true)}
                       className="lac-place-where-input lac-place-where-input--clickable"
@@ -240,7 +246,7 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
                     type="button"
                     className="lac-place-where-thumb"
                     onClick={() => setPickerVisible(true)}
-                    aria-label="选择地图位置"
+                    aria-label={t('modal.place.mapAria')}
                   >
                     {hasCoords ? (() => {
                       // Render the same multi-point thumb the cards use:
@@ -252,10 +258,24 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
                       // matching slot (so a coord-drag updates the thumb
                       // in real time). New places (no `initial.name`
                       // match) get appended at the end.
-                      const live = { lat: address!.latitude!, lng: address!.longitude!, coordinate_system: address!.coordinate_system };
+                      // live status: 当前表单里有 start_time 视作 'plan'，否则 'wish'。
+                      // 这样用户在 modal 里修改日期时缩略图的本点配色立即响应。
+                      const liveStatus = start ? 'plan' : 'wish';
+                      const live = {
+                        lat: address!.latitude!,
+                        lng: address!.longitude!,
+                        coordinate_system: address!.coordinate_system,
+                        status: liveStatus as 'plan' | 'wish',
+                      };
                       const base = (routeLocations || [])
                         .filter(l => typeof l.latitude === 'number' && typeof l.longitude === 'number')
-                        .map(l => ({ lat: l.latitude!, lng: l.longitude!, coordinate_system: l.coordinate_system, _name: l.name }));
+                        .map(l => ({
+                          lat: l.latitude!,
+                          lng: l.longitude!,
+                          coordinate_system: l.coordinate_system,
+                          status: l.status,
+                          _name: l.name,
+                        }));
                       let idx = initial?.name ? base.findIndex(p => p._name === initial.name) : -1;
                       if (idx >= 0) {
                         base[idx] = { ...live, _name: address?.name || '' };
@@ -270,7 +290,7 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
                           currentIndex={idx}
                           placeName={address?.name || ''}
                           mapKey={`${address!.latitude}-${address!.longitude}-${places.length}`}
-                          preferredProvider={settings.mapApiProvider as 'google' | 'gaode' | undefined}
+                          preferredProvider={(preferredProvider || settings.mapApiProvider) as 'google' | 'gaode' | undefined}
                           settings={settings}
                         />
                       );
@@ -285,11 +305,11 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
             {/* NOTES */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">notes</span>
+                <span className="lac-eyebrow">{t('modal.place.section.notes')}</span>
               </div>
               <textarea
                 value={desc}
-                placeholder="描述"
+                placeholder={t('modal.place.placeholder.notes')}
                 className="lac-place-notes-input"
                 onChange={(e) => handleInputChange('description', e.target.value)}
               />
@@ -298,11 +318,11 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
 
           <div className="lac-place-actions">
             {initial?.name && onDelete ? (
-              <button type="button" className="lac-btn lac-btn-danger lac-place-action-delete" onClick={onDelete}>delete</button>
+              <button type="button" className="lac-btn lac-btn-danger lac-place-action-delete" onClick={onDelete}>{t('modal.place.delete.label')}</button>
             ) : <span className="lac-place-action-spacer" />}
             <div className="lac-place-action-trailing">
-              <button type="button" className="lac-btn lac-btn-cancel" onClick={onCancel}>cancel</button>
-              <button type="button" className="lac-btn lac-btn-confirm" onClick={handleSave}>save</button>
+              <button type="button" className="lac-btn lac-btn-cancel" onClick={onCancel}>{t('modal.place.cancel.label')}</button>
+              <button type="button" className="lac-btn lac-btn-confirm" onClick={handleSave}>{t('modal.place.save.label')}</button>
             </div>
           </div>
         </div>
@@ -310,7 +330,14 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
 
       <DatePicker
         visible={!!datePickerVisibleFor}
-        value={extractDateFromTime((datePickerVisibleFor === 'start' ? start : end) || '') || ''}
+        value={
+          // 当前已选日期优先；否则用对端（开始/结束互推）；都没有就落到 trip 的
+          // start_time，省去用户从今天往后翻多年的麻烦。
+          extractDateFromTime((datePickerVisibleFor === 'start' ? start : end) || '')
+          || extractDateFromTime((datePickerVisibleFor === 'start' ? end : start) || '')
+          || (defaultPickerDate ? defaultPickerDate.slice(0, 10) : '')
+          || ''
+        }
         onCancel={cancelDate}
         onClear={() => { if (datePickerVisibleFor) clearDate(datePickerVisibleFor); cancelDate(); }}
         onConfirm={confirmDate}
@@ -321,16 +348,26 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
         onCancel={cancelTime}
         onClear={() => { if (timePickerVisibleFor) clearTime(timePickerVisibleFor); cancelTime(); }}
         onConfirm={confirmTime}
-        title={timePickerVisibleFor === 'start' ? '开始时间' : '结束时间'}
+        title={timePickerVisibleFor === 'start' ? t('modal.place.timePicker.start') : t('modal.place.timePicker.end')}
       />
 
       <MapSelector
         visible={pickerVisible}
         initialLocation={address}
         onCancel={() => setPickerVisible(false)}
-        onConfirm={(loc) => { setAddress(loc); setPickerVisible(false); }}
+        onConfirm={(loc) => {
+          setAddress(loc);
+          // 地图选点的名称即地点名称：每次确认选点都同步到 name —— 创建/编辑都生效。
+          // 用户仍可在确认 modal 之前手动改 name，但下一次选点会再覆盖。
+          if (loc?.name) {
+            setName(loc.name);
+            setNameError('');
+          }
+          setPickerVisible(false);
+        }}
         settings={{
-          mapApiProvider: settings.mapApiProvider,
+          // trip 级 provider 优先；MapSelector 直接读 mapApiProvider 当 provider 用
+          mapApiProvider: preferredProvider || settings.mapApiProvider,
           gaodeJsApiKey: settings.gaodeJsApiKey,
           gaodeWebServiceKey: settings.gaodeWebServiceKey,
           googleMapsApiKey: settings.googleMapsApiKey

@@ -3,9 +3,11 @@ import { Roadmap, Place, RouteSegment, Address } from '../../../types/roadmap';
 import { RoadmapSettings } from '../../../types';
 import { isPlace, isRouteSegment } from '../../../utils/typeGuards';
 import { isDateKey } from '../../../utils/date';
+import { t } from '../../../i18n';
 import RouteBadge from '../../../components/RouteBadge';
 import PlaceCard from './PlaceCard';
 import type { PlacePoint } from '../../../components/PlaceStaticMap';
+import { getPlaceStatus } from '../../../utils/placeStatus';
 import { formatStraightLineDistance } from '../helpers';
 
 export interface RouteEditTrigger {
@@ -20,6 +22,8 @@ interface Props {
   visibleItemIndices: number[];
   groupKeys: string[];
   groups: Record<string, Array<Place | RouteSegment>>;
+  /** 由 useRoadmapGroups 计算的 itemIndex → day key 映射 —— 单一事实源，避免与 stats / tabs 不一致。 */
+  groupKeyForItem: Map<number, string>;
   settings: RoadmapSettings;
   subEndpoints: Record<string, { start?: Address; end?: Address }>;
   cardListRef: React.RefObject<HTMLDivElement>;
@@ -34,7 +38,7 @@ interface Props {
 // interleaved on the spine. Day-eyebrow `DAY n` appears on the first
 // visible place of each date group.
 export default function Timeline({
-  data, visibleItemIndices, groupKeys, groups, settings,
+  data, visibleItemIndices, groupKeys, groups, groupKeyForItem, settings,
   subEndpoints, cardListRef, didDragRef, lastDraggedItemRef,
   onPlaceClick, onEditRoute,
 }: Props) {
@@ -44,23 +48,25 @@ export default function Timeline({
   for (const k of groupKeys) {
     if (isDateKey(k)) { dn++; dayNumberMap.set(k, dn); }
   }
-  const keyForPlace = (pl: Place): string => {
-    const start = pl.detail?.start_time;
-    return start ? String(start).split(' ')[0] : `第${pl.detail?.days ?? 1}天`;
+  // 非日期 key 形如 `第${i}天` —— 取出数字以便用本地化标签替换。
+  const extractDayN = (k: string): number | null => {
+    const m = k.match(/^第(\d+)天$/);
+    return m ? parseInt(m[1], 10) : null;
   };
   const labelForKey = (k: string): string => {
-    if (!k) return 'wishlist';
+    if (!k) return t('tabs.unplanned');
     if (isDateKey(k)) {
       const n = dayNumberMap.get(k);
-      return n != null ? `DAY ${n}` : k;
+      return n != null ? t('tabs.day.label', { n }) : k;
     }
-    return k;
+    const n = extractDayN(k);
+    return n != null ? t('tabs.day.label', { n }) : k;
   };
   const dayLabels: Array<string | undefined> = [];
   let prevKey = '';
   for (let i = 0; i < visibleItemIndices.length; i++) {
-    const pl = data.items[visibleItemIndices[i]] as Place;
-    const k = keyForPlace(pl);
+    const itemIndex = visibleItemIndices[i];
+    const k = groupKeyForItem.get(itemIndex) || '';
     dayLabels.push(k !== prevKey ? labelForKey(k) : undefined);
     prevKey = k;
   }
@@ -79,6 +85,7 @@ export default function Timeline({
         lat: addr.latitude,
         lng: addr.longitude,
         coordinate_system: addr.coordinate_system,
+        status: getPlaceStatus(it as Place),
       });
     }
   }
@@ -88,8 +95,13 @@ export default function Timeline({
       {visibleItemIndices.map((itemIndex, visIdx) => {
         const p = data.items[itemIndex] as Place;
         const nextItem = data.items[itemIndex + 1];
-        const routeAfter = isRouteSegment(nextItem) ? nextItem : undefined;
+        const storedRoute = isRouteSegment(nextItem) ? nextItem : undefined;
         const hasNextVisible = visIdx < visibleItemIndices.length - 1;
+        // 渲染排序后，文件里 P→Q 的 route 段不一定指向显示里 P 的下一张卡。
+        // 仅当显示下一张卡正好是文件里紧随 route 之后的那张地点，才认这条 route。
+        const displayNextItemIdx = hasNextVisible ? visibleItemIndices[visIdx + 1] : -1;
+        const storedNextPlaceIdx = storedRoute ? itemIndex + 2 : itemIndex + 1;
+        const routeAfter = storedRoute && displayNextItemIdx === storedNextPlaceIdx ? storedRoute : undefined;
         const dayLabel = dayLabels[visIdx];
         const tripIndex = tripIndexByItem.get(itemIndex) ?? -1;
 
@@ -148,7 +160,7 @@ export default function Timeline({
                     });
                   }}
                 >
-                  <span className="lac-route-badge-mode">+ transit</span>
+                  <span className="lac-route-badge-mode">{t('timeline.addTransit')}</span>
                   {distLabel && (
                     <>
                       <span className="lac-route-badge-sep">·</span>

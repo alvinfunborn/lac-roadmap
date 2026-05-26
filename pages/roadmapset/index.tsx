@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import CardCalendar, { buildDailyCounts } from '../../components/CardCalendar';
 import StaticMap from '../../components/StaticMap';
 import { App, Notice, TFile, WorkspaceLeaf } from 'obsidian';
@@ -10,6 +10,20 @@ import ConfirmModal from '../../components/modals/ConfirmModal';
 import RoadmapEditModal, { RoadmapEditPayload } from '../../components/modals/RoadmapEditModal';
 import { RoadmapSetStats, computeRoadmapStats } from '../../components/RoadmapStats';
 import { startOfDay, formatYMD, parseDateOrNull } from '../../utils/date';
+import { t } from '../../i18n';
+
+// 跨 mount 的滚动位置记忆：用 root file 路径作为 key，roadmap 详情页返回时
+// 通过 module-level Map 恢复（React state 在 RoadmapView.setState 切换路径时
+// 会重置；放外面才不会丢）。
+//
+// 单纯存 scrollTop 不够：CardCalendar 用 ResizeObserver 测量自身后会改 SVG 行
+// 高，hero map widget 也异步增高，整个 list 的 scrollHeight 初次挂载的 ~1s 内
+// 在浮动。raw scrollTop 在初挂载这帧设上去会被 max scrollTop 钳到偏上。
+//
+// 改为锚点：记最顶部一张卡的 id + 它内部的偏移。恢复时只要那张卡能找到、
+// 它的 boundingRect 在当帧正确，就能精确回位，跟 list 整体高度无关。
+interface ScrollAnchor { id: string; off: number }
+const scrollMemory = new Map<string, ScrollAnchor>();
 
 // 与 pages/roadmap 一致：用 Sortable.js 接管未安排区卡片的排序，
 // 这样能复用 ghost / chosen / drag 样式，提供释放预览与平滑动画。
@@ -53,6 +67,40 @@ function sortRoadmaps(loaded: Roadmap[], ids: string[]): Roadmap[] {
 
 // NOTE: CardCalendar moved out.
 
+// 懒挂载缩略图：卡片接近视口时才挂载 StaticMap，避免一次性触发所有 trip 的
+// 静态图 API（Google Static Maps / 高德 staticmap）。`rootMargin: 300px` 让
+// 缩略图在卡片真正进视野前就开始请求，滚动看不出延迟。
+// 一旦挂载就不再卸载——避免上下来回滚动反复发起请求。
+function LazyThumb({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (mounted) return;
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          setMounted(true);
+          io.disconnect();
+          return;
+        }
+      }
+    }, { rootMargin: '300px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [mounted]);
+  return (
+    <div ref={ref} className="lac-card-thumb">
+      {mounted ? children : (
+        <div className="lac-card-map-placeholder">
+          <span className="lac-card-map-placeholder-text">map</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RoadmapSetPage({ app, repository, settings, leaf }: Props) {
   const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
   const [mapVisible, setMapVisible] = useState(false);
@@ -62,8 +110,41 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
   const [editModalVisible, setEditModalVisible] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardListRef = useRef<HTMLDivElement | null>(null);
+  const scrollWrapperRef = useRef<HTMLDivElement | null>(null);
   // 防止 Sortable 拖拽结束时的 pointerup 触发卡片 onClick → 误打开 roadmap
   const didDragRef = useRef(false);
+
+  // 用 rootPath 作为 key 让多个 roadmapset（不同入口文件）各自独立记忆。
+  const memoryKey = repository.getRootPath();
+
+  // 滚动时把"最顶部一张卡的 id + 卡内偏移"写进 memory。rAF 节流避免每帧都 query。
+  useEffect(() => {
+    const el = scrollWrapperRef.current;
+    if (!el) return;
+    let scheduled = false;
+    const captureAnchor = () => {
+      scheduled = false;
+      const wrapperRect = el.getBoundingClientRect();
+      const cards = el.querySelectorAll<HTMLElement>('[data-rid]');
+      // 找第一张 bottom 落在 wrapper 顶之下的卡 —— 即视口最上面那张
+      for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
+        const r = card.getBoundingClientRect();
+        if (r.bottom > wrapperRect.top + 1) {
+          const id = card.dataset.rid;
+          if (id) scrollMemory.set(memoryKey, { id, off: wrapperRect.top - r.top });
+          return;
+        }
+      }
+    };
+    const onScroll = () => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(captureAnchor);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [memoryKey]);
 
   useEffect(() => {
     (async () => {
@@ -98,8 +179,44 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
       }
       setGlobalCounts(merged);
       setGlobalRangeDays(rangeDays);
+      // 锚点恢复：每帧 query 那张卡，按 boundingRect 算 scrollTop。
+      // 卡片热力图 / hero 地图加载后会改 list 高度，但只要那张卡本身的 rect
+      // 准确，scrollTop 就能精确落位。最多重试 ~2s，命中或卡片消失则停。
+      const anchor = scrollMemory.get(memoryKey);
+      if (anchor) {
+        let attempts = 0;
+        const maxAttempts = 120; // ~2s @ 60fps
+        let lastTop = -1;
+        let stable = 0;
+        const tryRestore = () => {
+          const el = scrollWrapperRef.current;
+          if (!el) return;
+          const sel = `[data-rid="${(window.CSS && CSS.escape) ? CSS.escape(anchor.id) : anchor.id}"]`;
+          const card = el.querySelector<HTMLElement>(sel);
+          if (card) {
+            const wrapperRect = el.getBoundingClientRect();
+            const cardRect = card.getBoundingClientRect();
+            // X = card.offsetTop_in_wrapper + off
+            //   card.offsetTop_in_wrapper = (cardTop_viewport - wrapperTop) + currentScrollTop
+            // 所以 X = scrollTop + (cardTop - wrapperTop) + off
+            const target = Math.max(0, el.scrollTop + (cardRect.top - wrapperRect.top) + anchor.off);
+            if (Math.abs(el.scrollTop - target) > 0.5) el.scrollTop = target;
+            // 连续 3 帧目标与实际差 ≤0.5 → list 稳了，可以收手
+            if (Math.abs(el.scrollTop - target) <= 0.5 && lastTop === el.scrollTop) {
+              stable++;
+              if (stable >= 3) return;
+            } else {
+              stable = 0;
+            }
+            lastTop = el.scrollTop;
+          }
+          attempts++;
+          if (attempts < maxAttempts) requestAnimationFrame(tryRestore);
+        };
+        requestAnimationFrame(tryRestore);
+      }
     })();
-  }, [repository, app]);
+  }, [repository, app, memoryKey]);
 
   const handleAdd = () => {
     setEditModalVisible(true);
@@ -109,17 +226,15 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
     const folder = (repository.getRootPath().split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
     await repository.createRoadmapFile(folder, payload.name, payload.detail);
     await repository.addRoadmapToSet(payload.name);
-    const ids = await repository.loadRoadmapSet();
-    const roadmapPromises = ids.map(async (id) => {
-      const dest = app.metadataCache.getFirstLinkpathDest(id, repository.getRootPath());
-      if (dest && dest instanceof TFile) {
-        return await repository.loadRoadmap(dest.path);
-      }
-      return null;
-    });
-    const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
-    setRoadmaps(sortRoadmaps(loaded, ids));
     setEditModalVisible(false);
+    // 创建完直接进新路线详情页，符合"创建即开始编辑"的直觉；
+    // 列表刷新留给下一次回到 set 页时自然 reload。
+    const dest = app.metadataCache.getFirstLinkpathDest(payload.name, repository.getRootPath());
+    if (dest && dest instanceof TFile) {
+      const target = resolveTargetLeaf();
+      await target.setViewState({ type: 'lac-roadmap-view', state: { filePath: dest.path }, active: true });
+      app.workspace.revealLeaf(target);
+    }
   };
 
   /** Resolve the leaf to navigate on. Prefer the leaf RoadmapView injected
@@ -158,7 +273,7 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
 
   const handleDeleteRoadmap = async (roadmap: Roadmap) => {
     setContextMenu(null);
-    const modal = new ConfirmModal(`从集合中移除「${roadmap.name}」？`, '删除', '取消', true);
+    const modal = new ConfirmModal(t('page.set.confirm.remove', { name: roadmap.name }), t('common.delete'), t('common.cancel'), true);
     const ok = await modal.open();
     if (!ok) return;
     const ids = await repository.loadRoadmapSet();
@@ -176,30 +291,30 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
   const handleDeleteRoadmapPermanently = async (roadmap: Roadmap) => {
     setContextMenu(null);
     const confirm1 = await new ConfirmModal(
-      `彻底删除「${roadmap.name}」并将其 .md 文件移入回收站？`,
-      '继续',
-      '取消',
+      t('page.set.confirm.delete1', { name: roadmap.name }),
+      t('common.confirm'),
+      t('common.cancel'),
       true,
     ).open();
     if (!confirm1) return;
     const confirm2 = await new ConfirmModal(
-      `此操作不可撤销。文件中的地点引用本身（[[...]]）保留为孤立链接。再次确认彻底删除「${roadmap.name}」？`,
-      '彻底删除',
-      '取消',
+      t('page.set.confirm.delete2', { name: roadmap.name }),
+      t('page.set.menu.deletePermanent'),
+      t('common.cancel'),
       true,
     ).open();
     if (!confirm2) return;
 
     const dest = app.metadataCache.getFirstLinkpathDest(roadmap.id, repository.getRootPath());
     if (!dest || !(dest instanceof TFile)) {
-      new Notice('未找到对应的 .md 文件');
+      new Notice(t('notice.fileNotFound'));
       return;
     }
     try {
       await app.fileManager.trashFile(dest);
     } catch (e) {
       console.warn('[RoadmapSetPage] trashFile failed', e);
-      new Notice('删除文件失败');
+      new Notice(t('notice.deleteFileFailed'));
       return;
     }
     // 同步移除根集合中的引用
@@ -213,12 +328,12 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
     });
     const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
     setRoadmaps(sortRoadmaps(loaded, newIds));
-    new Notice(`已彻底删除「${roadmap.name}」`);
+    new Notice(t('notice.deletedTrip', { name: roadmap.name }));
   };
 
   const handleCopyRoadmap = async (roadmap: Roadmap) => {
     setContextMenu(null);
-    const newName = roadmap.name + ' 副本';
+    const newName = roadmap.name + (t('page.set.menu.copy') === 'Duplicate' ? ' (copy)' : ' 副本');
     const folder = (repository.getRootPath().split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
     const newFilePath = await repository.createRoadmapFile(folder, newName, roadmap.detail);
     await repository.updateRoadmapItems(newFilePath, newName, roadmap.detail || {}, roadmap.items);
@@ -378,10 +493,19 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
     <div className="lac-roadmapset-root">
       {/* 顶部固定区：先 eyebrow + h1 + count，再 stats，再地图（严格按 design 顺序）*/}
       <div className="lac-roadmapset-header">
-        <div className="lac-eyebrow lac-roadmapset-eyebrow">LaC · Roadmap</div>
+        <div className="lac-eyebrow lac-roadmapset-eyebrow">{t('page.set.eyebrow')}</div>
         <div className="lac-roadmapset-title-row">
-          <h1 className="lac-serif lac-roadmapset-title">行程</h1>
-          <span className="lac-mono lac-roadmapset-count">{roadmaps.length} trips</span>
+          <h1 className="lac-serif lac-roadmapset-title">{t('page.set.title')}</h1>
+          <div className="lac-roadmapset-title-trailing">
+            <span className="lac-mono lac-roadmapset-count">{t('page.set.tripCount', { n: roadmaps.length })}</span>
+            <button
+              type="button"
+              className="lac-roadmapset-add-inline"
+              onClick={handleAdd}
+              title={t('page.set.newTrip')}
+              aria-label={t('page.set.newTrip')}
+            >+</button>
+          </div>
         </div>
         <div className="lac-roadmapset-stats">
           <RoadmapSetStats roadmaps={roadmaps} />
@@ -392,15 +516,15 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
           role="button"
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMapVisible(true); } }}
-          aria-label="点击放大地图"
+          aria-label={t('page.set.mapAria')}
         >
           <AggregatedMap app={app} repository={repository} settings={settings} />
-          <span className="lac-map-widget-expand">↗ expand</span>
+          <span className="lac-map-widget-expand">{t('page.set.mapExpand')}</span>
         </div>
       </div>
 
       {/* 下方卡片列表（独立滚动区域）*/}
-      <div className="lac-roadmapset-list-wrapper">
+      <div className="lac-roadmapset-list-wrapper" ref={scrollWrapperRef}>
         <div className="lac-card-list" ref={cardListRef}>
           {roadmaps.map((roadmap, idx) => {
             const description = roadmap.detail?.description || '';
@@ -424,9 +548,10 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
 
             return (
               <React.Fragment key={roadmap.id}>
-                {showWishlist && <div className="lac-list-eyebrow lac-eyebrow">未安排 · wishlist</div>}
-                {showPlanned  && <div className="lac-list-eyebrow lac-eyebrow">已规划 · planned</div>}
+                {showWishlist && <div className="lac-list-eyebrow lac-eyebrow">{t('page.set.section.wishlist')}</div>}
+                {showPlanned  && <div className="lac-list-eyebrow lac-eyebrow">{t('page.set.section.planned')}</div>}
               <div
+                data-rid={roadmap.id}
                 className={`lac-card lac-cursor-pointer${canDrag ? ' lac-card--compact' : ''}`}
                 onClick={() => {
                   // 拖拽结束的 pointerup 会触发 click——这里吞掉一次，避免误打开 roadmap。
@@ -450,7 +575,7 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
                       {dateRange && <span>{dateRange}</span>}
                       {dateRange && <span className="lac-card-meta-sep">·</span>}
                       <span className="lac-card-meta-num">{cardStats.placeCount}</span>
-                      <span> places</span>
+                      <span>{t('page.roadmap.stats.places')}</span>
                       {hasDistance && <span className="lac-card-meta-sep">·</span>}
                       {hasDistance && <span className="lac-card-meta-num">{cardStats.distanceText}</span>}
                     </div>
@@ -460,9 +585,9 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
                       </div>
                     )}
                   </div>
-                  <div className="lac-card-thumb">
+                  <LazyThumb>
                     <StaticMap roadmap={roadmap} settings={settings} status={statusColor as 'lac-done' | 'lac-todo' | 'lac-na'} />
-                  </div>
+                  </LazyThumb>
                 </div>
               </div>
               </React.Fragment>
@@ -471,7 +596,7 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
         </div>
         {/* 列表底部新增按钮 — 字段日记式安静的虚线 + new trip */}
         <div style={{ padding: '6px 0 24px' }}>
-          <button type="button" className="lac-btn--quiet" onClick={handleAdd}>+ new trip</button>
+          <button type="button" className="lac-btn--quiet" onClick={handleAdd}>{t('page.set.newTrip')}</button>
         </div>
       </div>
 
@@ -481,9 +606,9 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
           style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button type="button" className="lac-btn lac-context-item" onClick={() => handleDeleteRoadmap(contextMenu.roadmap)}>从集合移除</button>
-          <button type="button" className="lac-btn lac-context-item" onClick={() => handleCopyRoadmap(contextMenu.roadmap)}>复制</button>
-          <button type="button" className="lac-btn lac-context-item lac-context-item-danger" onClick={() => handleDeleteRoadmapPermanently(contextMenu.roadmap)}>彻底删除</button>
+          <button type="button" className="lac-btn lac-context-item" onClick={() => handleDeleteRoadmap(contextMenu.roadmap)}>{t('page.set.menu.remove')}</button>
+          <button type="button" className="lac-btn lac-context-item" onClick={() => handleCopyRoadmap(contextMenu.roadmap)}>{t('page.set.menu.copy')}</button>
+          <button type="button" className="lac-btn lac-context-item lac-context-item-danger" onClick={() => handleDeleteRoadmapPermanently(contextMenu.roadmap)}>{t('page.set.menu.deletePermanent')}</button>
         </div>
       )}
 

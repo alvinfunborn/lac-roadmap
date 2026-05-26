@@ -16,7 +16,6 @@ Life as Code - Roadmap is a travel planning and journaling plugin for Obsidian. 
 - **Aggregate Map**: a hero map at the top of each page; click to expand into a pan/zoom-able read-only viewer
 - **Recursive Structure**: a place file can simultaneously be the entry of a sub-roadmap (`type = "root"`, `renders = ["roadmap"]`), so a trip can contain nested trips
 - **Place Reuse**: the same place file can be referenced by multiple trips; generic fields (name / description / address) live in the place file, while per-trip times live as overrides in the roadmap file
-- **Export**: plain text itinerary, Markdown (paste back into Obsidian), `.ics` (calendar import), `.gpx` (GPS / outdoor apps)
 - **Drag & Drop**: reorder places within a day; drag across day tabs to reassign date; auto-recompute affected route segments
 
 ### 🗺️ Dual Map Provider
@@ -173,13 +172,6 @@ On a trip detail page:
 ### 5. Hero Map
 The map at the top of trip / trip-list pages is a preview. Click it to open a full read-only map viewer where you can pan / zoom / inspect markers. The hero is intentionally a preview because the warm-ink visual treatment doesn't pass through pointer events under Chromium — see `docs/PROGRESS.md` for the trade-off.
 
-### 6. Export
-On a trip detail page, the bottom `↓ EXPORT` menu offers four formats:
-- **Copy plain text** — readable text itinerary.
-- **Copy markdown** — Obsidian-pastable Markdown with stats table.
-- **Download .ics** — calendar event file (import into Google Calendar / Apple Calendar / Outlook).
-- **Download .gpx** — GPS exchange format for outdoor apps (auto-converts GCJ-02 → WGS84).
-
 ## Technical Implementation
 
 - Obsidian Plugin API for file operations and view registration.
@@ -201,10 +193,9 @@ Main components:
   - `RoadmapHeader` — back button + serif title + stats + hero map.
   - `DayTabsStrip` — three-tier mono day tabs with long-press reorder.
   - `Timeline` — spine + numbered bullets + place cards + route chips.
-  - `RoadmapActions` — `+ add place / + add trip / ↓ export` menu.
+  - `RoadmapActions` — `+ add place / + add trip` row.
 - `RoadmapRepository` — TOML parsing, place CRUD, sub-roadmap detection, route segment writes.
 - `RouteCalculationService` — Google Directions / AMap routing wrapper.
-- `RoadmapExportService` — plain / Markdown / ICS / GPX exporters.
 - `MapSelector` — full-screen map modal (interactive picker + read-only viewer).
 - `AggregatedMap` — hero map widget with warm-ink filter and overlay chrome.
 

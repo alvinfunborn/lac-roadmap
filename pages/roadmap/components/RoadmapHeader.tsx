@@ -5,6 +5,7 @@ import { RoadmapRepository } from '../../../repositories/RoadmapRepository';
 import { RoadmapSettings } from '../../../types';
 import RoadmapStats from '../../../components/RoadmapStats';
 import AggregatedMap, { MapLocationItem } from '../../../components/map/AggregatedMap';
+import { t } from '../../../i18n';
 
 interface Props {
   app: App;
@@ -45,23 +46,26 @@ export default function RoadmapHeader({
     if (!s) return '';
     try {
       const sd = new Date(s);
-      const fmt = (d: Date) => d.toISOString().slice(5, 10).replace('-', '·'); // MM·DD
-      if (!e) return fmt(sd);
+      const ymd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '·'); // YYYY·MM·DD
+      const md  = (d: Date) => d.toISOString().slice(5, 10).replace('-', '·');   // MM·DD
+      if (!e) return ymd(sd);
       const ed = new Date(e);
-      if (sd.getTime() === ed.getTime()) return fmt(sd);
-      return `${fmt(sd)} → ${fmt(ed)}`;
+      if (sd.getTime() === ed.getTime()) return ymd(sd);
+      // 同年只在起点带年份；跨年两端都带，避免读者得自己脑补。
+      const sameYear = sd.getUTCFullYear() === ed.getUTCFullYear();
+      return sameYear ? `${ymd(sd)} → ${md(ed)}` : `${ymd(sd)} → ${ymd(ed)}`;
     } catch { return ''; }
   })();
 
   return (
     <>
       <div className="lac-roadmap-eyebrow-row">
-        <button type="button" className="lac-roadmap-back" onClick={onBack} title="返回" aria-label="返回">
+        <button type="button" className="lac-roadmap-back" onClick={onBack} title={t('page.roadmap.back')} aria-label={t('page.roadmap.back')}>
           <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
             <polyline points="10 4 6 8 10 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div className="lac-eyebrow lac-roadmap-eyebrow">trip</div>
+        <div className="lac-eyebrow lac-roadmap-eyebrow">{t('page.roadmap.eyebrow')}</div>
       </div>
       <div className="lac-roadmap-title-row" onClick={onOpenMetaEditor}>
         <h1 className={`lac-serif lac-roadmap-title lac-roadmap-title--${kind}`}>{data?.name || filePath}</h1>
@@ -79,7 +83,7 @@ export default function RoadmapHeader({
         role={onHeroMapClick ? 'button' : undefined}
         tabIndex={onHeroMapClick ? 0 : undefined}
         onKeyDown={onHeroMapClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHeroMapClick(); } } : undefined}
-        aria-label={onHeroMapClick ? '点击放大地图' : undefined}
+        aria-label={onHeroMapClick ? t('page.set.mapAria') : undefined}
       >
         <AggregatedMap
           app={app}
@@ -89,7 +93,7 @@ export default function RoadmapHeader({
           preferredProvider={data?.detail?.map_provider}
           useNumberedMarkers
         />
-        {onHeroMapClick && <span className="lac-map-widget-expand">↗ expand</span>}
+        {onHeroMapClick && <span className="lac-map-widget-expand">{t('page.set.mapExpand')}</span>}
       </div>
     </>
   );

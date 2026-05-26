@@ -1,12 +1,16 @@
 import React from 'react';
 import { RoadmapSettings } from '../types';
 import { CoordinateConverter } from './map/GoogleMap';
+import type { PlaceStatus } from '../utils/placeStatus';
 
 export interface PlacePoint {
   lat: number;
   lng: number;
   /** WGS84 / GCJ-02; defaults to WGS84 when omitted. */
   coordinate_system?: string;
+  /** Trip-relative status — 'wish' 脱离时间轴：不连线、不编号、用 wish 色单独画圆点。
+   *  缺省视为 'plan'（参与编号 + 连线）。 */
+  status?: PlaceStatus;
 }
 
 interface PlaceStaticMapProps {
@@ -166,11 +170,22 @@ export default function PlaceStaticMap({
     return { x, y, visible: x >= -2 && x <= 102 && y >= -2 && y <= 102 };
   });
 
-  // Polyline points string — skip pairs where either endpoint is off-image
-  // by joining only visible runs. Simpler: include all (off-image just
-  // means the line extends past the SVG which is fine, it gets clipped
-  // by overflow:hidden on the thumb container).
-  const polylinePts = positions.map(p => `${p.x},${p.y}`).join(' ');
+  // 计算 planned 序号（wishlist 跳过编号），并组装仅含 planned 的折线 path。
+  // wishlist 单独画圆点（无数字 / wish 配色 / 不参与连线）。
+  const PLAN_FILL = '#D3BC8D';
+  const WISH_FILL = '#C77A4A';
+  type Annotated = { x: number; y: number; visible: boolean; isWish: boolean; plannedIdx: number };
+  let plannedCounter = 0;
+  const annotated: Annotated[] = positions.map((p, i) => {
+    const isWish = places[i]?.status === 'wish';
+    const plannedIdx = isWish ? -1 : plannedCounter++;
+    return { ...p, isWish, plannedIdx };
+  });
+  const polylinePts = annotated
+    .filter(a => !a.isWish)
+    .map(a => `${a.x},${a.y}`)
+    .join(' ');
+  const plannedCount = plannedCounter;
 
   return (
     <>
@@ -181,30 +196,36 @@ export default function PlaceStaticMap({
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        {positions.length >= 2 && (
+        {plannedCount >= 2 && (
           <polyline
             points={polylinePts}
             fill="none"
-            stroke="#D3BC8D"
+            stroke={PLAN_FILL}
             strokeOpacity="0.78"
             strokeWidth="1.2"
             strokeLinejoin="round"
             strokeLinecap="round"
           />
         )}
-        {positions.map((p, i) => {
+        {annotated.map((p, i) => {
           if (!p.visible) return null;
-          // All markers identical — no special highlight for the current
-          // place, since centering the map on it already makes it the
-          // focal point. The number inside echoes the trip order from
-          // the timeline and the hero map.
+          if (p.isWish) {
+            // Wishlist：纯色小圆点 + 半透明光晕，无数字
+            return (
+              <g key={i}>
+                <circle cx={p.x} cy={p.y} r={5.5} fill={WISH_FILL} fillOpacity={0.22} />
+                <circle cx={p.x} cy={p.y} r={3.4} fill={WISH_FILL} stroke="#0E1316" strokeWidth={1.2} />
+              </g>
+            );
+          }
+          // Planned：金色圆章 + planned 序号（不是数组下标）
           return (
             <g key={i}>
               <circle
                 cx={p.x}
                 cy={p.y}
                 r={6}
-                fill="#D3BC8D"
+                fill={PLAN_FILL}
                 stroke="#0E1316"
                 strokeWidth={1.4}
               />
@@ -217,7 +238,7 @@ export default function PlaceStaticMap({
                 fontWeight={600}
                 fontFamily='"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace'
                 fill="#0E1316"
-              >{i + 1}</text>
+              >{p.plannedIdx + 1}</text>
             </g>
           );
         })}

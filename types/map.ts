@@ -5,6 +5,8 @@ export interface MapLocation {
   name?: string;
   address?: string;
   coordinate_system?: string; // WGS84/GPS, GCJ-02, etc.
+  /** Trip-relative status — 'wish' (无日期) 在地图上脱离时间轴：不连线、不编号、用 wish 色单独画圆点。 */
+  status?: 'done' | 'plan' | 'wish';
 }
 
 export interface MapSearchResult {

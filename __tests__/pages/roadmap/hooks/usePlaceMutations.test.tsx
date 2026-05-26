@@ -165,17 +165,18 @@ describe('usePlaceMutations.onSavePlace (create branch)', () => {
     const { result } = renderHook(() => usePlaceMutations(params));
 
     await act(async () => {
-      await result.current.onSavePlace({ name: 'New', description: 'd' });
+      await result.current.onSavePlace({ name: 'New', start_time: '2025-11-01 09:00', description: 'd' });
     });
 
     expect(repo.savePlaceFile).toHaveBeenCalled();
-    expect(repo.updateRoadmapItems).toHaveBeenCalled();
-    // alwaysSeparatePlaceSchedule defaults to true -> schedule write happens
-    expect(repo.updatePlaceScheduleInRoadmap).toHaveBeenCalledWith(
-      'LaC/Roadmap/R.md',
-      'New',
-      { start_time: null, end_time: null },
-    );
+    // Schedule lives inline on the place block — see updateRoadmapItems.
+    // Old code path used a separate updatePlaceScheduleInRoadmap call which
+    // could not disambiguate duplicate [[name]] entries; UI path no longer
+    // uses it.
+    const items = repo.updateRoadmapItems.mock.calls[0][3] as Place[];
+    expect(items[0].name).toBe('New');
+    expect(items[0].detail.start_time).toBe('2025-11-01 09:00');
+    expect(repo.updatePlaceScheduleInRoadmap).not.toHaveBeenCalled();
     expect(params.setData).toHaveBeenCalled();
   });
 
@@ -208,7 +209,7 @@ describe('usePlaceMutations.onSavePlace (edit branch)', () => {
     const { result } = renderHook(() => usePlaceMutations(params));
 
     // Enter edit mode by seeding editInitial first
-    act(() => { result.current.editPlace(old); });
+    act(() => { result.current.editPlace(old, 0); });
     await act(async () => {
       await result.current.onSavePlace({ name: 'X', description: 'new' });
     });
@@ -221,6 +222,50 @@ describe('usePlaceMutations.onSavePlace (edit branch)', () => {
     const items = repo.updateRoadmapItems.mock.calls[0][3] as Place[];
     expect(items[0].name).toBe('X');
     expect(items[0].detail.description).toBe('new');
+  });
+
+  it('targets the exact occurrence (by itemIndex) when the same place appears twice', async () => {
+    // Reproduces the 天山北 / 赛里木湖 bug: edit the second occurrence
+    // (initially wishlist) and assign it a date. Must NOT touch the first
+    // occurrence's existing date.
+    const first: Place = { id: 'Sai', name: 'Sai', detail: { start_time: '2026-06-10' } };
+    const second: Place = { id: 'Sai', name: 'Sai', detail: {} };
+    const data: Roadmap = { id: 'R', name: 'R', detail: {}, items: [first, second] };
+    const repo = makeRepoMock(data);
+    const app = createApp();
+    app.vault.files.set('LaC/Roadmap/Sai.md', { file: new TFile('LaC/Roadmap/Sai.md'), content: 'name = "Sai"\n' });
+    const params = makeHookParams({ data, repository: repo as any, app: app as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    // Edit the SECOND occurrence (index 1)
+    act(() => { result.current.editPlace(second, 1); });
+    await act(async () => {
+      await result.current.onSavePlace({ name: 'Sai', start_time: '2026-06-11' });
+    });
+
+    const items = repo.updateRoadmapItems.mock.calls[0][3] as Place[];
+    expect(items.length).toBe(2);
+    // First occurrence keeps its original date untouched
+    expect(items[0].detail.start_time).toBe('2026-06-10');
+    // Second occurrence — the one being edited — gets the new date
+    expect(items[1].detail.start_time).toBe('2026-06-11');
+    expect(repo.updatePlaceScheduleInRoadmap).not.toHaveBeenCalled();
+  });
+});
+
+describe('usePlaceMutations.deletePlace by index', () => {
+  it('deletes only the matching occurrence when itemIndex is provided', async () => {
+    const first: Place = { id: 'Sai', name: 'Sai', detail: { start_time: '2026-06-10' } };
+    const second: Place = { id: 'Sai', name: 'Sai', detail: {} };
+    const data: Roadmap = { id: 'R', name: 'R', detail: {}, items: [first, second] };
+    const repo = makeRepoMock(data);
+    const params = makeHookParams({ data, repository: repo as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    await act(async () => { await result.current.deletePlace(second, 1); });
+    const itemsArg = repo.updateRoadmapItems.mock.calls[0][3] as Place[];
+    expect(itemsArg.length).toBe(1);
+    expect(itemsArg[0].detail.start_time).toBe('2026-06-10');
   });
 });
 

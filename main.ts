@@ -91,7 +91,6 @@ export default class RoadmapPlugin extends Plugin {
 
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
-        if (!this.settings.enableContextMenu) return;
         if (file instanceof TFile && file.extension === 'md') {
           menu.addItem((item) => {
             item

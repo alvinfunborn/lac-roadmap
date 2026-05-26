@@ -50,6 +50,44 @@
   white-space: nowrap;
 }
 
+// 标题行右侧的"X trips"+迷你"+"组合：紧贴排版，悬浮才高亮
+.lac-roadmapset-title-trailing {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+// 顶部的"+"快速添加：极克制 —— 仅一个 mono 字符，hover/focus 才显出底色
+// 与轮廓。与底部的虚线 `+ new trip` 形成"两端入口"对称，不抢标题视线。
+.lac-roadmapset-add-inline {
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--text-1);
+    border-color: var(--hairline);
+    background: var(--surface-2);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
 .lac-roadmapset-stats { margin: 0; }
 
 .lac-roadmapset-list-wrapper {

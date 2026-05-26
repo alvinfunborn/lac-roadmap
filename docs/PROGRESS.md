@@ -128,6 +128,43 @@
 - 用户 Vault 数据一致性问题（§8.2.3 / §8.2.6）属于数据治理，不在代码范围（Wave 1 已修当时存在的重复 `[[秋叶原]]`）
 - 路径规划失败时的离线 fallback（当前为 Notice 提示，后续可考虑用直线距离作为默认值）
 
+## Wave 8 — 移除导出 + wishlist 视觉差异 + 同名/拖拽 bug 修（v1.4.0，2026-05-26）
+
+### 移除导出功能
+
+数据已是 TOML + Markdown，Obsidian 自身工作流可直接消费，独立导出格式（plain / Markdown / ICS / GPX）的真实用户旅程没有验证过，维护成本不再划算。
+
+- **UI**：`pages/roadmap/index.tsx` 去掉 `RoadmapExportService` import / `downloadFile` helper / `exportItems` 编排；`RoadmapActions.tsx` 去掉 `exportItems` prop、state、ref、`pointerdown` 收起 effect 和整段下拉菜单 JSX，组件回到只有两枚 dashed `+ add place` / `+ add trip`。
+- **Service & 测试**：`services/RoadmapExportService.ts` + `__tests__/services/RoadmapExportService.test.ts` 整文件删除；`__tests__/integration/end_to_end.test.ts` 去掉 export 相关 import 与断言。
+- **样式 & i18n**：`_roadmap-page.scss` 删除 4 段 `.lac-roadmap-export*`；`i18n.ts` 删 6 个 export-only key。
+- **文档**：`docs/requirements.md` §7.3.2 改为 ❎ 标记；`README.md` / `README.zh-CN.md` 去掉 export 描述与 RoadmapExportService Architecture 提及。
+
+### Wishlist 三态视觉差异（贯穿所有地图面）
+
+`MapLocation` / `PlacePoint` 加 `status?: 'done'|'plan'|'wish'`。`'wish'`（无日期）地点脱离时间轴：**不参与连线、不进入 1/2/3 编号**，单独用 wish 色（`#C77A4A`）圆点呈现。
+
+覆盖 6 处地图面：地点卡片右侧 PlaceStaticMap、PlaceEditModal 缩略图、RoadmapEditModal 缩略图、AggregatedMap (hero)、MapSelector readOnly (hero 展开)、MapSelector picker (PlaceEditModal 选址)。AggregatedMap 与 MapSelector 走"两次 displaySearchMarkers"（planned 走 `'number'` + statuses + polyline；wishlist 走 `'circle'` + wish 色）；PlaceStaticMap 走 SVG 双层圆点 + planned-rank 重新计数（wishlist 不占编号）。PlaceEditModal 的 live 点按表单 `start` 状态实时切换 wish/plan。
+
+### 同名重复地点修复 — 按 itemIndex 写
+
+历史 bug：trip 内同一 `[[name]]` 出现两次时，编辑 wishlist 那条的日期保存会跑到另一条（first-match）。根因是 `updatePlaceScheduleInRoadmap` 按 name 线性查找 + `onSavePlace` 的 nextItems map 也按 name 全替换 + 新 `place.detail` 不带 times → 另一条原有时间被擦掉，新时间写到第一条。
+
+修法：`PlaceEditInitial` 加 `itemIndex`；`editPlace(p, itemIndex?)` 与 `deletePlace(p, itemIndex?)` 透传；`onSavePlace` 非改名分支按 index 替换；`place.detail` 直接携带 start_time/end_time 由 `updateRoadmapItems` inline 落盘（不再走第二次 `updatePlaceScheduleInRoadmap`）。Timeline 既有的 `(place, itemIndex)` 在 `handlePlaceClick` 里接通。增 2 个测试 197 → 199。
+
+### 拖拽自动同步日期判据收紧
+
+历史 bug：用户拖 `6-11 赛里木湖` 到 `6-11 乌鲁木齐` 上方，赛里木湖被改成 `6-10`。根因是旧逻辑"dropped 有 start_time 就取上一张有 start_time 卡片的日期"无条件触发，同日重排被误判为跨日继承。同段代码还调 `savePlaceFile` 把 trip 级时间写进了**共享 place 文件**，污染其他引用同地点的 trip。
+
+修法：自动继承日期只在"前后邻居都指向同一新日期、且与当前日期不同"时触发；仅换 date、保留 time-of-day；去掉 `savePlaceFile` 反向写，per-trip 时间统一由 `updateRoadmapItems` 写 trip 文件。
+
+### Hero MapSelector provider 对齐 trip
+
+历史 bug：roadmap 顶部地图（预览态 AggregatedMap）已通过 `preferredProvider` 走 trip provider（gaode/google），但点击展开的 MapSelector 直接传 raw `settings`，仍是全局 `mapApiProvider`，预览红是高德、点开变 Google。修法：照 `PlaceEditModal:354-360` 既有 pattern 浅拷贝 settings 覆盖 `mapApiProvider` 为 `data.detail.map_provider`。
+
+### i18n 大幅扩面 + 设置/统计 i18n 化 + wishlist 天数计算 + roadmapset 滚动锚 + LazyThumb
+
+由前期 wave 沉淀，与 Wave 8 一起发：`i18n.ts` 把 settings / modals / page strings 全部 zh+en 化（357 行扩张）；`components/settings/RoadmapSettingTab.ts` 完全接入 `t()`；`RoadmapStats` 修 wishlist 桶被错算入天数的问题，统计行接 i18n；`useRoadmapGroups` / `useTabs` / `utils/date` 完善三态分组与排序；`pages/roadmapset/index.tsx` 加跨 mount 滚动锚点记忆（按 trip id + offset，避免 layout 浮动时被钳到偏上）+ LazyThumb（IntersectionObserver 懒挂载 StaticMap）。
+
 ### Wave 7 后 BUG 修复
 
 - **roadmapset 卡片点击开新 tab + goBack 历史堆积**：✅ 修复（v1.3.1）。根因是 `main.ts:RoadmapView.setState` 在 in-place 切换 view 时**漏传 `leaf: this.leaf`**——首次 onOpen 传了 leaf，但后续 setState 重新渲染没传，导致 RoadmapSetPage / RoadmapPage 的 `leaf` prop 变 undefined，下次 navigation 落到 `getLeaf(false)` fallback，目标 leaf 不可控（可能落在别的 markdown tab 上），视觉上像"新页面"。修复：(1) `setState` 两处 `React.createElement` 都补 `leaf: this.leaf`；(2) `RoadmapSetPage.openRoadmap` / `handleCopyRoadmap` 抽出 `resolveTargetLeaf()` helper，fallback 链改为 `prop → existing lac-roadmap-view leaf → getLeaf(false)`；(3) `RoadmapPage.handlePlaceClick`（点 sub-roadmap 卡片）应用同样的 fallback 链。

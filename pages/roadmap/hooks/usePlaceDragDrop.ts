@@ -150,41 +150,41 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
       if (isPlace(items[i])) { affectedIndices.push(i); break; }
     }
 
-    // 若有时间：改为上一有时间的卡片的时间；若无，且当前时间>下一有时间的，则改为下一
+    // 自动同步日期：仅在"前后两位已排日期的邻居一致地指向同一个新日期"时触发，
+    // 把 dropped 的日期换成那个邻居日期（time-of-day 保留）。
+    //
+    // 历史 bug：旧实现是"只要 dropped 有 start_time 就改成前一张有 start_time
+    // 的卡片的时间"。结果同一天内的重排会被误判为跨日继承——例如
+    // [6-10 赛里木湖, 6-11 乌鲁木齐, 6-11 赛里木湖] 中把第二个赛里木湖拖到
+    // 乌鲁木齐上方，前邻居是 6-10 赛里木湖，dropped 被改成 6-10。"两邻居一致
+    // 才继承"的判据正好排除这种歧义同时保留"拖入同质化新日期"的便利。
+    //
+    // 不再写共享 place 文件 —— per-trip 的 start_time/end_time 走 trip 文件
+    // （后面的 updateRoadmapItems 会一并写回）。
     const droppedPlace = isPlace(block[0]) ? block[0] : undefined;
     if (droppedPlace && droppedPlace.detail?.start_time) {
-      const folder = (filePath.split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
-      let updated = false;
+      const datePart = (s: string | undefined) => s ? String(s).split(' ')[0] : '';
+      const currentDate = datePart(droppedPlace.detail.start_time);
+      let prevPlace: Place | undefined;
       for (let i = insertAt - 1; i >= 0; i--) {
-        const prev = items[i];
-        if (isPlace(prev) && prev.detail?.start_time) {
-          droppedPlace.detail = {
-            ...droppedPlace.detail,
-            start_time: prev.detail?.start_time,
-            end_time: prev.detail?.end_time,
-          };
-          await repository.savePlaceFile(folder, droppedPlace);
-          updated = true;
-          break;
-        }
+        const it = items[i];
+        if (isPlace(it) && it.detail?.start_time) { prevPlace = it; break; }
       }
-      if (!updated) {
-        for (let i = insertAt + 1; i < items.length; i++) {
-          const nx = items[i];
-          if (isPlace(nx) && nx.detail?.start_time) {
-            const droppedT = new Date(droppedPlace.detail!.start_time!).getTime();
-            const nextT = new Date(nx.detail!.start_time!).getTime();
-            if (!isNaN(droppedT) && !isNaN(nextT) && droppedT > nextT) {
-              droppedPlace.detail = {
-                ...droppedPlace.detail,
-                start_time: nx.detail?.start_time,
-                end_time: nx.detail?.end_time,
-              };
-              await repository.savePlaceFile(folder, droppedPlace);
-            }
-            break;
-          }
-        }
+      let nextPlace: Place | undefined;
+      for (let i = insertAt + 1; i < items.length; i++) {
+        const it = items[i];
+        if (isPlace(it) && it.detail?.start_time) { nextPlace = it; break; }
+      }
+      const prevDate = datePart(prevPlace?.detail?.start_time);
+      const nextDate = datePart(nextPlace?.detail?.start_time);
+      if (prevDate && prevDate === nextDate && prevDate !== currentDate) {
+        const time = extractTimeFromDateTime(droppedPlace.detail.start_time);
+        const endTime = extractTimeFromDateTime(droppedPlace.detail.end_time || '');
+        droppedPlace.detail = {
+          ...droppedPlace.detail,
+          start_time: time ? `${prevDate} ${time}` : prevDate,
+          end_time: endTime ? `${prevDate} ${endTime}` : undefined,
+        };
       }
     }
 
@@ -222,8 +222,13 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
       droppedPlace.detail.end_time = undefined;
     }
     const sortKeys = (keys: string[]) => keys.slice().sort(compareGroupKey);
+    // 三态 key（与 useRoadmapGroups 对齐）：拖动算位置时如果某地点是 wishlist
+    // 状态（没 start_time 也没 days），用临时 dayIndex 作 fallback，仅用于
+    // 排序计算，不会写回 detail.days。
     const getKey = (p: Place, di: number) =>
-      p.detail?.start_time ? String(p.detail.start_time).split(' ')[0] : `第${p.detail?.days ?? di}天`;
+      p.detail?.start_time
+        ? String(p.detail.start_time).split(' ')[0]
+        : (p.detail?.days != null ? `第${p.detail.days}天` : `第${di}天`);
 
     let insertAt = -1;
     let dayIndex = 1;

@@ -32,15 +32,14 @@ describe('useRoadmapGroups', () => {
     expect(result.current.groups['2025-11-02'].length).toBe(1);
   });
 
-  it('places with no start_time go to "第N天" bucket; N auto-increments per key change', () => {
+  it('places with neither start_time nor detail.days go to the wishlist bucket (empty key)', () => {
     const r: Roadmap = {
       id: 'r', name: 'r',
       items: [makePlace('a'), makePlace('b'), makePlace('c')],
     };
     const { result } = renderHook(() => useRoadmapGroups(r));
-    // First place: no start, no detail.days → key = "第1天"
-    // Same key for following places (currentKey doesn't change without start_time)
-    expect(Object.keys(result.current.groups)).toContain('第1天');
+    expect(Object.keys(result.current.groups)).toEqual(['']);
+    expect(result.current.groups[''].length).toBe(3);
   });
 
   it('honors detail.days when present and start_time absent', () => {

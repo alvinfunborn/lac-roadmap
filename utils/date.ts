@@ -66,9 +66,14 @@ export function isDateKey(k: string): boolean {
 }
 
 /**
- * 路线图分组 key 的排序比较：日期在前（升序），"第N天" 在后（数值升序）
+ * 路线图分组 key 的排序比较：日期在前（升序），"第N天" 居中（数值升序），
+ * 空串 wishlist 永远殿后。
  */
 export function compareGroupKey(a: string, b: string): number {
+  // wishlist 桶（空 key）永远排最后
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
   const aIsDate = isDateKey(a);
   const bIsDate = isDateKey(b);
   if (aIsDate && bIsDate) return a.localeCompare(b);

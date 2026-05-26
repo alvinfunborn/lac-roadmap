@@ -10,37 +10,40 @@ export interface RoadmapGroups {
   groupKeys: string[];
   /** items 中最后一张地点的下标（-1 表示没有地点） */
   lastPlaceIndex: number;
+  /** itemIndex -> 该 item 所属 day key —— 让 Timeline / stats 复用同一分组算法 */
+  groupKeyForItem: Map<number, string>;
 }
 
 /** 根据 data.items 生成按日/第N天的分组与有序 key */
 export function useRoadmapGroups(data: Roadmap | null): RoadmapGroups {
-  const groups = useMemo(() => {
+  const { groups, groupKeyForItem } = useMemo(() => {
     const result: Record<string, Array<Place | RouteSegment>> = {};
+    const keyForItem = new Map<number, string>();
     const items = data?.items || [];
-    let dayIndex = 1;
-    let currentKey = '';
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (isPlace(it)) {
         const start = it.detail?.start_time;
-        // 无 start_time 时：有 detail.days 用其；否则推断
-        const key = start
-          ? String(start).split(' ')[0]
-          : `第${it.detail?.days ?? dayIndex}天`;
-        if (key !== currentKey) {
-          currentKey = key;
-          if (!start) dayIndex++;
-        }
-        result[currentKey] = result[currentKey] || [];
-        result[currentKey].push(it);
+        const days = it.detail?.days;
+        // 三种状态：
+        //   start_time → 真日期 key (YYYY-MM-DD)
+        //   detail.days 显式设置（用户拖到 Day-N 标签）→ "第N天" key
+        //   都没有 → 空 key，归到 wishlist 桶（在 Timeline 不显示 day label）
+        let key: string;
+        if (start) key = String(start).split(' ')[0];
+        else if (days != null) key = `第${days}天`;
+        else key = '';
+        result[key] = result[key] || [];
+        result[key].push(it);
+        keyForItem.set(i, key);
         const next = items[i + 1];
         if (isRouteSegment(next)) {
-          result[currentKey].push(next);
+          result[key].push(next);
           i++;
         }
       }
     }
-    return result;
+    return { groups: result, groupKeyForItem: keyForItem };
   }, [data]);
 
   const groupKeys = useMemo(() => {
@@ -55,7 +58,7 @@ export function useRoadmapGroups(data: Roadmap | null): RoadmapGroups {
     return -1;
   }, [data?.items]);
 
-  return { groups, groupKeys, lastPlaceIndex };
+  return { groups, groupKeys, lastPlaceIndex, groupKeyForItem };
 }
 
 export { isDateKey, compareGroupKey };

@@ -1,19 +1,12 @@
 import { createApp, TFile } from '../__mocks__/obsidian';
 import { RoadmapRepository } from '../../repositories/RoadmapRepository';
-import {
-  exportPlainText,
-  exportICS,
-  exportMarkdown,
-  exportGpx,
-} from '../../services/RoadmapExportService';
 import { Place, RouteSegment } from '../../types/roadmap';
 
 /**
  * End-to-end integration: exercises the real RoadmapRepository against a
- * mock vault, then feeds the loaded roadmap into the real export services.
- * If any contract drifts (TOML parse, wikilink scan, lookahead, override
- * insertion, endpoints, export shape), one of these assertions will catch
- * it without needing to wire up a real Obsidian instance.
+ * mock vault. If any contract drifts (TOML parse, wikilink scan, lookahead,
+ * override insertion, endpoints), one of these assertions will catch it
+ * without needing to wire up a real Obsidian instance.
  */
 
 const ROOT_PATH = 'LaC/Roadmap/roadmap.md';
@@ -37,7 +30,7 @@ function buildFixture() {
   return { app, repo: new RoadmapRepository(app as any, ROOT_PATH) };
 }
 
-describe('end-to-end: vault → repository → export', () => {
+describe('end-to-end: vault → repository', () => {
   it('boots — root validates and set lists one trip', async () => {
     const { repo } = buildFixture();
     expect(await repo.isValidEntry()).toBe(true);
@@ -67,7 +60,7 @@ describe('end-to-end: vault → repository → export', () => {
     expect(r!.endPoint?.name).toBe('东大寺');
   });
 
-  it('round-trip: mutate place schedule → reload → assert + export still valid', async () => {
+  it('round-trip: mutate place schedule → reload → assert', async () => {
     const { repo } = buildFixture();
     const path = 'LaC/Roadmap/京都两日.md';
 
@@ -82,23 +75,6 @@ describe('end-to-end: vault → repository → export', () => {
 
     // The trip's route segment should survive the schedule mutation
     expect(reloaded!.items.some(it => !('name' in it))).toBe(true);
-
-    // Each export should produce non-empty output and reference the new times
-    const plain = exportPlainText(reloaded!);
-    expect(plain).toContain('伏见稻荷');
-    expect(plain).toContain('11:00');
-
-    const ics = exportICS(reloaded!);
-    expect(ics).toContain('BEGIN:VCALENDAR');
-    expect(ics).toContain('SUMMARY:伏见稻荷');
-
-    const md = exportMarkdown(reloaded!);
-    expect(md).toContain('# 京都两日');
-    expect(md).toContain('伏见稻荷');
-
-    const gpx = exportGpx(reloaded!);
-    expect(gpx).toContain('<gpx');
-    expect(gpx).toContain('伏见稻荷');
   });
 
   it('recursive sub-roadmap structure: a place that is also a roadmap entry keeps its type/renders after generic edit', async () => {

@@ -165,31 +165,51 @@ export default function AggregatedMap({ app, repository, settings, overrideLocat
           if (cancelled) return;
           await new Promise(r => requestAnimationFrame(r));
           if (cancelled) return;
-          const results: MapSearchResult[] = locations.map(loc => ({ name: loc.title, address: '', location: { longitude: loc.lng, latitude: loc.lat, name: loc.title } }));
+          const toResult = (loc: { lng: number; lat: number; title: string }): MapSearchResult => ({
+            name: loc.title, address: '', location: { longitude: loc.lng, latitude: loc.lat, name: loc.title },
+          });
           // 先画折线，再画 markers，让 markers 在折线上层（provider 也通过 zIndex 保证）
           inst.clearPolylines();
-          if (useNumberedMarkers && locations.length >= 2) {
-            const segs: Array<{ path: Array<[number, number]>; style: 'solid' | 'dashed'; color?: string }> = [];
-            for (let i = 0; i < locations.length - 1; i++) {
-              const a = locations[i];
-              const b = locations[i + 1];
-              // 仅在 overrideLocations 模式下可得到 travelModeToNext；没有则也画默认实线
-              const mode = a.travelModeToNext;
-              segs.push({
-                path: [[a.lng, a.lat], [b.lng, b.lat]],
-                style: styleForTravelMode(mode),
-                color: colorForTravelMode(mode),
+          if (useNumberedMarkers) {
+            // wishlist 地点（无日期）不在时间轴上，因此不参与连线、不进入 1/2/3 编号；
+            // 仅作为单色圆点呈现，让"已计划路线"与"想去但未排"两组视觉上分离。
+            const planned = locations.filter(l => l.status !== 'wish');
+            const wishlist = locations.filter(l => l.status === 'wish');
+            if (planned.length >= 2) {
+              const segs: Array<{ path: Array<[number, number]>; style: 'solid' | 'dashed'; color?: string }> = [];
+              for (let i = 0; i < planned.length - 1; i++) {
+                const a = planned[i];
+                const b = planned[i + 1];
+                // 仅在 overrideLocations 模式下可得到 travelModeToNext；没有则也画默认实线
+                const mode = a.travelModeToNext;
+                segs.push({
+                  path: [[a.lng, a.lat], [b.lng, b.lat]],
+                  style: styleForTravelMode(mode),
+                  color: colorForTravelMode(mode),
+                });
+              }
+              if (segs.length) inst.drawPolylines(segs);
+            }
+            if (planned.length > 0) {
+              inst.displaySearchMarkers(planned.map(toResult), () => {}, {
+                markerStyle: 'number',
+                statuses: planned.map(l => l.status),
               });
             }
-            if (segs.length) inst.drawPolylines(segs);
+            if (wishlist.length > 0) {
+              inst.displaySearchMarkers(wishlist.map(toResult), () => {}, {
+                markerStyle: 'circle',
+                statuses: wishlist.map(() => 'wish' as const),
+              });
+            }
+          } else {
+            // Set-page aggregated view: single-colour circle markers, no
+            // polyline, no per-place status tint (dense scatter reads as
+            // one cohort, not a status legend).
+            inst.displaySearchMarkers(locations.map(toResult), () => {}, {
+              markerStyle: 'circle',
+            });
           }
-          inst.displaySearchMarkers(results, () => {}, {
-            markerStyle: useNumberedMarkers ? 'number' : 'circle',
-            // Status-tint only the numbered (per-trip) markers — the
-            // set-page aggregated circle markers stay a single colour so
-            // the dense scatter reads as one cohort, not a status legend.
-            statuses: useNumberedMarkers ? locations.map(l => l.status) : undefined,
-          });
           if (locations.length > 0) inst.fitBounds(locations);
         }
       } catch (error: any) {

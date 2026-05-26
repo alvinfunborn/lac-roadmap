@@ -431,13 +431,9 @@ IMapProvider (接口)
 
 已实现（Wave 4）。`RoadmapRepository.updatePlaceGeneric` 只写入地点文件的通用字段（name / description / address），同时保留 `type` / `renders` 等原有顶层字段；`updatePlaceScheduleInRoadmap` 将 start_time / end_time 以"wikilink 后紧随的时间覆盖行"方式写回当前路线文件，保证同一地点在不同路线中拥有独立的行程时间。
 
-#### 7.3.2 ✅ 导出行程
+#### 7.3.2 ❎ 导出行程（已移除）
 
-已实现（Wave 4 + Wave 5）。`services/RoadmapExportService.ts` 提供：
-- **纯文本**：纯文本行程单（Wave 4）
-- **ICS**：iCalendar 日历文件，每个有时间的地点一个 VEVENT，自动判定 all-day vs 时间段（Wave 4）
-- **Markdown**：H1/H2 + Wikilink + 统计表格，可直接贴回 Obsidian（Wave 5）
-- **GPX**：GPX 1.1 标准 wpt + trk/trkseg；GCJ-02 自动转 WGS84 以满足 GPX 规范（Wave 5）
+Wave 4 + Wave 5 曾实现过 plain / ICS / Markdown / GPX 四种导出格式，Wave 8 整体移除（UI、service、i18n、SCSS、单元/集成测试全部清理）。原因：数据已经是 TOML + Markdown，可直接被 Obsidian 自身工作流（笔记复制、模板、Dataview 等）消费，独立的导出格式收益不足以抵销维护成本。如未来重新引入，需先证明日历/GPS 用户旅程的真实需求。
 
 #### 7.3.3 ✅ 行程统计
 

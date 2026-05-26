@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Roadmap, Place, RouteSegment } from '../types/roadmap';
 import { isPlace, isRouteSegment } from '../utils/typeGuards';
+import { t } from '../i18n';
 
 interface Props {
   roadmap: Roadmap | null;
@@ -38,19 +39,15 @@ function computeDaysFromRoadmap(roadmap: Roadmap): number {
     const diff = Math.round((ed.getTime() - sd.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     if (isFinite(diff) && diff > 0) return diff;
   }
-  // Fallback: count unique day groups from items
+  // Fallback: count unique day groups from items（wishlist 桶不计入天数）
   const daySet = new Set<string>();
-  let dayIndex = 1;
-  let currentKey = '';
   for (const it of roadmap.items) {
     if (isPlace(it)) {
       const start = it.detail?.start_time;
-      const key = start ? String(start).split(' ')[0] : `第${it.detail?.days ?? dayIndex}天`;
-      if (key !== currentKey) {
-        currentKey = key;
-        if (!start) dayIndex++;
-      }
-      daySet.add(currentKey);
+      const days = it.detail?.days;
+      if (start) daySet.add(String(start).split(' ')[0]);
+      else if (days != null) daySet.add(`第${days}天`);
+      // 无 start_time 也无 days → wishlist，不算天数
     }
   }
   return daySet.size;
@@ -89,9 +86,9 @@ export default function RoadmapStats({ roadmap }: Props) {
   const sep = <span className="lac-stats-sep">·</span>;
   return (
     <div className="lac-stats-line">
-      <span><span className="lac-stats-num">{stats.days}</span><span className="lac-stats-unit"> days</span></span>
+      <span><span className="lac-stats-num">{stats.days}</span><span className="lac-stats-unit">{t('page.roadmap.stats.days')}</span></span>
       {sep}
-      <span><span className="lac-stats-num">{stats.placeCount}</span><span className="lac-stats-unit"> places</span></span>
+      <span><span className="lac-stats-num">{stats.placeCount}</span><span className="lac-stats-unit">{t('page.roadmap.stats.places')}</span></span>
       {sep}
       <span><span className="lac-stats-num">{stats.distanceText}</span></span>
       {sep}
@@ -131,13 +128,13 @@ export function RoadmapSetStats({ roadmaps }: SetProps) {
   const sep = <span className="lac-stats-sep">·</span>;
   return (
     <div className="lac-stats-line">
-      <span className="lac-stats-done">{done} done</span>
+      <span className="lac-stats-done">{t('page.set.stats.done', { n: done })}</span>
       {sep}
-      <span className="lac-stats-plan">{planning} planning</span>
+      <span className="lac-stats-plan">{t('page.set.stats.planning', { n: planning })}</span>
       {sep}
-      <span className="lac-stats-wish">{unplanned} wishlist</span>
+      <span className="lac-stats-wish">{t('page.set.stats.wishlist', { n: unplanned })}</span>
       {sep}
-      <span>{placeTotal} places</span>
+      <span>{t('page.set.stats.places', { n: placeTotal })}</span>
     </div>
   );
 }

@@ -85,30 +85,63 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
     try { inst.clearPolylines(); } catch {}
     if (list.length === 0) return;
     const targetIsWgs84 = target === 'google';
-    const points: { lng: number; lat: number; title: string }[] = [];
+    type OverlayPoint = { lng: number; lat: number; title: string; status?: 'done' | 'plan' | 'wish' };
+    const points: OverlayPoint[] = [];
     for (const loc of list) {
       const pt = toTargetCoords(loc, targetIsWgs84);
-      if (pt) points.push({ ...pt, title: loc.name || '' });
+      if (pt) points.push({ ...pt, title: loc.name || '', status: loc.status });
     }
     if (points.length === 0) return;
-    // Connecting polyline first (if enabled), then markers on top.
-    if (effectiveShowPolyline && points.length >= 2) {
-      const segs = [] as Array<{ path: Array<[number, number]>; style: 'solid' | 'dashed'; color?: string }>;
-      for (let i = 0; i < points.length - 1; i++) {
-        const a = points[i];
-        const b = points[i + 1];
-        segs.push({ path: [[a.lng, a.lat], [b.lng, b.lat]], style: 'solid', color: '#D3BC8D' });
-      }
-      try { inst.drawPolylines(segs); } catch {}
-    }
-    const results: MapSearchResult[] = points.map(p => ({
+    const toResult = (p: OverlayPoint): MapSearchResult => ({
       name: p.title,
       address: '',
       location: { longitude: p.lng, latitude: p.lat, name: p.title },
-    }));
-    try {
-      routeMarkersRef.current = inst.displaySearchMarkers(results, () => {}, { markerStyle: effectiveMarkerStyle });
-    } catch {}
+    });
+    // 'number' overlay 模式（trip 路线视图）：wishlist 点不参与连线、不进入
+    // 1/2/3 编号，作为单色圆点单独画。'circle' 模式（roadmapset 散点视图）
+    // 保持原行为 —— 一律是圆点，没有时间序，也就没有 wishlist 概念。
+    const markers: any[] = [];
+    if (effectiveMarkerStyle === 'number') {
+      const planned = points.filter(p => p.status !== 'wish');
+      const wishlist = points.filter(p => p.status === 'wish');
+      if (effectiveShowPolyline && planned.length >= 2) {
+        const segs = [] as Array<{ path: Array<[number, number]>; style: 'solid' | 'dashed'; color?: string }>;
+        for (let i = 0; i < planned.length - 1; i++) {
+          const a = planned[i];
+          const b = planned[i + 1];
+          segs.push({ path: [[a.lng, a.lat], [b.lng, b.lat]], style: 'solid', color: '#D3BC8D' });
+        }
+        try { inst.drawPolylines(segs); } catch {}
+      }
+      try {
+        if (planned.length > 0) {
+          markers.push(...inst.displaySearchMarkers(planned.map(toResult), () => {}, {
+            markerStyle: 'number',
+            statuses: planned.map(p => p.status),
+          }));
+        }
+        if (wishlist.length > 0) {
+          markers.push(...inst.displaySearchMarkers(wishlist.map(toResult), () => {}, {
+            markerStyle: 'circle',
+            statuses: wishlist.map(() => 'wish' as const),
+          }));
+        }
+      } catch {}
+    } else {
+      if (effectiveShowPolyline && points.length >= 2) {
+        const segs = [] as Array<{ path: Array<[number, number]>; style: 'solid' | 'dashed'; color?: string }>;
+        for (let i = 0; i < points.length - 1; i++) {
+          const a = points[i];
+          const b = points[i + 1];
+          segs.push({ path: [[a.lng, a.lat], [b.lng, b.lat]], style: 'solid', color: '#D3BC8D' });
+        }
+        try { inst.drawPolylines(segs); } catch {}
+      }
+      try {
+        markers.push(...inst.displaySearchMarkers(points.map(toResult), () => {}, { markerStyle: 'circle' }));
+      } catch {}
+    }
+    routeMarkersRef.current = markers;
     // Only fit-bounds when the user does NOT have a focused point already
     // (e.g. opening the picker fresh, with no initial location). When
     // editing a known place we keep the provider's default zoom centered

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Place, RouteSegment } from '../../../types/roadmap';
 import { isPlace } from '../../../utils/typeGuards';
 import { isDateKey } from '../../../utils/date';
+import { t } from '../../../i18n';
 import { TabDef } from '../hooks/useTabs';
 
 interface Props {
@@ -105,9 +106,8 @@ export default function DayTabsStrip({
           tdef.key && dragActiveKey === tdef.key ? ' lac-tab--dragging' :
           tdef.key && dragOverKey === tdef.key && dragActiveKey && dragActiveKey !== tdef.key ? ' lac-tab--drag-over' : '';
         const dn = dateTabNumber.get(tdef.id);
-        const dayMark = dn != null ? String(dn) : '·';
         const dateLabel = tdef.id === 'unplanned'
-          ? 'wishlist'
+          ? t('tabs.unplanned')
           : (tdef.key && isDateKey(tdef.key) ? tabDateLabel(tdef.key) : tdef.label);
         const count = tabCount(tdef.id, tdef.key);
         return (
@@ -132,7 +132,7 @@ export default function DayTabsStrip({
               },
             } : {})}
           >
-            <span className="lac-day-tab-eyebrow">DAY {dayMark}</span>
+            <span className="lac-day-tab-eyebrow">{dn != null ? t('tabs.day.eyebrow', { n: dn }) : t('tabs.day.eyebrow.placeholder')}</span>
             <span className="lac-day-tab-row">
               <span className="lac-day-tab-label">{dateLabel}</span>
               <span className="lac-day-tab-count">{count}</span>
@@ -140,7 +140,7 @@ export default function DayTabsStrip({
           </button>
         );
       })}
-      <button className="lac-tab lac-tab--add" onClick={addDayOnly} title="添加一天">+ day</button>
+      <button className="lac-tab lac-tab--add" onClick={addDayOnly} title={t('tabs.add.title')}>{t('tabs.add')}</button>
     </div>
   );
 }

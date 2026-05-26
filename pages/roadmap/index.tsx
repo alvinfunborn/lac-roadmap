@@ -9,8 +9,9 @@ import RoadmapEditModal, { RoadmapEditPayload } from '../../components/modals/Ro
 import MapSelector from '../../components/map/MapSelector';
 import { isPlace } from '../../utils/typeGuards';
 import { compareGroupKey, isDateKey } from '../../utils/date';
-import { exportPlainText, exportICS, exportMarkdown, exportGpx } from '../../services/RoadmapExportService';
+import { getPlaceStatus } from '../../utils/placeStatus';
 import { MapLocation } from '../../types/map';
+import { t } from '../../i18n';
 
 import { useRoadmapGroups } from './hooks/useRoadmapGroups';
 import { usePlaceDragDrop } from './hooks/usePlaceDragDrop';
@@ -78,12 +79,12 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         }
       } catch (err) {
         console.warn('[RoadmapPage] 加载路线失败', err);
-        new Notice('加载路线失败');
+        new Notice(t('notice.loadFailed'));
       }
     })();
   }, [repository, filePath, app]);
 
-  const { groups, groupKeys, lastPlaceIndex } = useRoadmapGroups(data);
+  const { groups, groupKeys, lastPlaceIndex, groupKeyForItem } = useRoadmapGroups(data);
 
   const {
     selectedTabs, onToggleTab, tabDefs, filteredKeys,
@@ -139,41 +140,10 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
       setData(r);
     } catch (err) {
       console.warn('[RoadmapPage] 保存路线元数据失败', err);
-      new Notice('保存失败');
+      new Notice(t('notice.saveFailed'));
     }
     setMetaEditorVisible(false);
   };
-
-  // Export handlers — wired into RoadmapActions' export menu.
-  const downloadFile = (text: string, filename: string, mime: string) => {
-    const blob = new Blob([text], { type: `${mime};charset=utf-8` });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 500);
-  };
-  const exportItems = data ? [
-    { label: 'copy plain text', onClick: async () => {
-      try { await navigator.clipboard.writeText(exportPlainText(data)); new Notice('已复制'); }
-      catch (e) { console.warn('[RoadmapPage] copy failed', e); new Notice('复制失败'); }
-    } },
-    { label: 'copy markdown', onClick: async () => {
-      try { await navigator.clipboard.writeText(exportMarkdown(data)); new Notice('已复制 Markdown'); }
-      catch (e) { console.warn('[RoadmapPage] markdown copy failed', e); new Notice('复制失败'); }
-    } },
-    { label: 'download .ics', onClick: () => {
-      try { downloadFile(exportICS(data), `${data.name}.ics`, 'text/calendar'); }
-      catch (e) { console.warn('[RoadmapPage] ics download failed', e); new Notice('导出失败'); }
-    } },
-    { label: 'download .gpx', onClick: () => {
-      try { downloadFile(exportGpx(data), `${data.name}.gpx`, 'application/gpx+xml'); }
-      catch (e) { console.warn('[RoadmapPage] gpx download failed', e); new Notice('导出失败'); }
-    } },
-  ] : undefined;
 
   /**
    * Back navigation. Tries (in order):
@@ -237,7 +207,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
   // through to any existing lac-roadmap-view leaf, then activeLeaf as a
   // last resort. Avoids landing on an unrelated tab and breaking the
   // history-back navigation.
-  const handlePlaceClick = async (p: Place, _itemIndex: number) => {
+  const handlePlaceClick = async (p: Place, itemIndex: number) => {
     const subPath = subRouteMap[p.id];
     if (subPath) {
       const target = hostLeaf
@@ -249,7 +219,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
       }
       return;
     }
-    places.editPlace(p);
+    places.editPlace(p, itemIndex);
   };
 
   // PlaceEditModal's routeLocations — all geocoded places in this trip
@@ -262,7 +232,11 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
       if (!isPlace(it)) continue;
       const loc = it.detail?.address as MapLocation | undefined;
       if (loc && typeof loc.longitude === 'number' && typeof loc.latitude === 'number') {
-        list.push({ ...loc, name: loc.name || (it as Place).name });
+        list.push({
+          ...loc,
+          name: loc.name || (it as Place).name,
+          status: getPlaceStatus(it as Place),
+        });
       }
     }
     return list.length ? list : undefined;
@@ -302,6 +276,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
             visibleItemIndices={visibleItemIndices}
             groupKeys={groupKeys}
             groups={groups}
+            groupKeyForItem={groupKeyForItem}
             settings={settings}
             subEndpoints={subEndpoints}
             cardListRef={cardListRef}
@@ -314,7 +289,6 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         <RoadmapActions
           onAddPlace={places.addPlaceFromList}
           onAddTrip={() => places.setSubRoadmapEditorVisible(true)}
-          exportItems={exportItems}
         />
       </div>
 
@@ -322,12 +296,17 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         visible={places.editorVisible}
         settings={settings}
         initial={places.editInitial}
+        preferredProvider={data?.detail?.map_provider}
+        defaultPickerDate={data?.detail?.start_time}
         onCancel={() => places.setEditorVisible(false)}
         onConfirm={places.onSavePlace}
         onDelete={places.editInitial?.name && data ? async () => {
-          const p = (data.items || []).find(it => isPlace(it) && it.name === places.editInitial!.name) as Place | undefined;
+          const idx = places.editInitial!.itemIndex;
+          const p = (typeof idx === 'number' && idx >= 0 && idx < (data.items || []).length && isPlace(data.items[idx]))
+            ? data.items[idx] as Place
+            : (data.items || []).find(it => isPlace(it) && it.name === places.editInitial!.name) as Place | undefined;
           if (p) {
-            await places.deletePlace(p);
+            await places.deletePlace(p, idx);
             places.setEditorVisible(false);
             places.setEditInitial(undefined);
           }
@@ -351,7 +330,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
             setData(r);
           } catch (err) {
             console.warn('[RoadmapPage] 更新路线段失败', err);
-            new Notice('更新路线段失败');
+            new Notice(t('notice.updateSegmentFailed'));
           }
           setRouteEditState(null);
         }}
@@ -396,12 +375,16 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         visible={heroViewerVisible}
         onCancel={() => setHeroViewerVisible(false)}
         onConfirm={() => setHeroViewerVisible(false)}
-        settings={settings}
+        settings={{
+          ...settings,
+          mapApiProvider: data?.detail?.map_provider || settings.mapApiProvider,
+        }}
         routeLocations={mapLocations.map(l => ({
           name: l.title,
           longitude: l.lng,
           latitude: l.lat,
           coordinate_system: l.coordinate_system,
+          status: l.status,
         }))}
         readOnly
       />

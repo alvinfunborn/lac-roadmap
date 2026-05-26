@@ -25,6 +25,13 @@ interface PlaceEditInitial {
   end_time?: string;
   description?: string;
   address?: MapLocation;
+  /**
+   * Position of this place in `data.items` when the editor was opened.
+   * Required to disambiguate duplicate `[[name]]` entries in the same
+   * trip — without it, the schedule write hits the first matching name.
+   * Undefined when opening the editor for a new place.
+   */
+  itemIndex?: number;
 }
 
 interface UsePlaceMutationsParams {
@@ -53,8 +60,8 @@ export interface PlaceMutationsApi {
 
   // Handlers
   addPlaceFromList: () => void;
-  editPlace: (p: Place) => void;
-  deletePlace: (p: Place) => Promise<void>;
+  editPlace: (p: Place, itemIndex?: number) => void;
+  deletePlace: (p: Place, itemIndex?: number) => Promise<void>;
   onSavePlace: (payload: PlaceEditPayload) => Promise<void>;
   onCreateSubRoadmap: (payload: RoadmapEditPayload) => Promise<void>;
 }
@@ -70,33 +77,26 @@ export function usePlaceMutations({
   const [subRoadmapEditorVisible, setSubRoadmapEditorVisible] = useState(false);
 
   /**
-   * 在新增地点前后自动补 route segment：
-   * - 前置地点存在且双方有坐标 → 计算/补 route（计算失败则插空壳并提示）
-   * - 后继地点存在且双方有坐标 → 同理
+   * 调整某地点前后的 route segment。
    *
-   * 嵌套子路线（type=root + renders=roadmap）作为 place 出现时，
-   * 不再用它的 trip-level `detail.address`（往往只是个大区域名）作为
-   * 路由端点 — 改用它的 `startPoint`（被路由"指进"时用）/
-   * `endPoint`（被路由"指出"时用），即子路线第一/最后一个 geocoded
-   * 地点。
+   * mode = 'insert-if-missing'（创建场景）：仅当前/后某段不存在时才插入新段。
+   *   嵌套子路线（type=root + renders=roadmap）作为 place 出现时，路由端点
+   *   不再用 trip-level `detail.address`（往往只是个大区域名）—— 改用它的
+   *   `startPoint`/`endPoint`（首/末一个 geocoded 地点）。
+   *
+   * mode = 'recompute'（编辑坐标场景）：强制重算前/后两段，保留原有 travelMode；
+   *   原本没有 route 行的两端不补（让用户自己决定要不要加 transit）。
    */
-  const autoInsertRoutesAroundNewPlace = async (
+  const applyRoutesAroundPlace = async (
     items: Array<Place | RouteSegment>,
-    newPlace: Place,
+    targetPlace: Place,
+    mode: 'insert-if-missing' | 'recompute',
   ) => {
     const hasCoord = (p?: Place) =>
       !!p?.detail?.address &&
       typeof p.detail.address.longitude === 'number' &&
       typeof p.detail.address.latitude === 'number';
-    if (!hasCoord(newPlace)) return;
-
-    const idx = items.findIndex(it => isPlace(it) && (it as Place).name === newPlace.name);
-    if (idx < 0) return;
-
-    let prevIdx = -1;
-    for (let i = idx - 1; i >= 0; i--) {
-      if (isPlace(items[i])) { prevIdx = i; break; }
-    }
+    if (!hasCoord(targetPlace)) return;
 
     const service = new RouteCalculationService(
       settings?.googleMapsApiKey,
@@ -122,11 +122,15 @@ export function usePlaceMutations({
       return p;
     };
 
-    const buildSeg = async (from: Place, to: Place): Promise<RouteSegment> => {
+    const buildSeg = async (
+      from: Place,
+      to: Place,
+      travelMode: RouteSegment['travelMode'],
+    ): Promise<RouteSegment | null> => {
       try {
         const fromEff = await resolveEndpoint(from, 'exit');
         const toEff = await resolveEndpoint(to, 'entry');
-        const result = await service.calculateRoute(fromEff, toEff, 'drive', provider);
+        const result = await service.calculateRoute(fromEff, toEff, travelMode, provider);
         if (result) {
           return {
             travelMode: result.travelMode,
@@ -136,35 +140,62 @@ export function usePlaceMutations({
           };
         }
       } catch (e) {
-        console.warn('[usePlaceMutations] auto route calc failed', e);
+        console.warn('[usePlaceMutations] route calc failed', e);
       }
-      new Notice(t('modal.routeSegment.manualEditHint'));
-      return { travelMode: 'drive', distance: 0, duration: 0, tolls: 0 };
+      // recompute 模式下计算失败保留原段，不覆盖为空壳；插入模式下回退空壳并提示。
+      if (mode === 'insert-if-missing') {
+        new Notice(t('modal.routeSegment.manualEditHint'));
+        return { travelMode, distance: 0, duration: 0, tolls: 0 };
+      }
+      return null;
     };
 
     const isSubRoadmapPlace = (p: Place) => !!subRouteMap[p.id];
     const hasRoutableCoord = (p?: Place) => !!p && (hasCoord(p) || isSubRoadmapPlace(p));
 
+    // — Prev → target —
+    let idx = items.findIndex(it => isPlace(it) && (it as Place).name === targetPlace.name);
+    if (idx < 0) return;
+    let prevIdx = -1;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (isPlace(items[i])) { prevIdx = i; break; }
+    }
     if (prevIdx >= 0 && hasRoutableCoord(items[prevIdx] as Place)) {
-      const afterPrev = items[prevIdx + 1];
-      if (!(afterPrev && !isPlace(afterPrev) && (afterPrev as RouteSegment).travelMode)) {
-        const seg = await buildSeg(items[prevIdx] as Place, newPlace);
-        items.splice(prevIdx + 1, 0, seg);
+      const segIdx = prevIdx + 1;
+      const existing = items[segIdx];
+      const existingIsRoute = existing && !isPlace(existing) && !!(existing as RouteSegment).travelMode;
+      const shouldRewrite = mode === 'insert-if-missing' ? !existingIsRoute : existingIsRoute;
+      if (shouldRewrite) {
+        const travelMode: RouteSegment['travelMode'] =
+          existingIsRoute ? (existing as RouteSegment).travelMode : 'drive';
+        const seg = await buildSeg(items[prevIdx] as Place, targetPlace, travelMode);
+        if (seg) {
+          if (existingIsRoute) items[segIdx] = seg;
+          else { items.splice(segIdx, 0, seg); idx++; }
+        }
       }
     }
 
-    const idx2 = items.findIndex(it => isPlace(it) && (it as Place).name === newPlace.name);
-    if (idx2 < 0) return;
-
-    let nextIdx2 = -1;
-    for (let i = idx2 + 1; i < items.length; i++) {
-      if (isPlace(items[i])) { nextIdx2 = i; break; }
+    // — target → next —（idx 在前面可能因 splice 前移过，重新找一次更稳）
+    idx = items.findIndex(it => isPlace(it) && (it as Place).name === targetPlace.name);
+    if (idx < 0) return;
+    let nextIdx = -1;
+    for (let i = idx + 1; i < items.length; i++) {
+      if (isPlace(items[i])) { nextIdx = i; break; }
     }
-    if (nextIdx2 >= 0 && hasRoutableCoord(items[nextIdx2] as Place)) {
-      const afterNew = items[idx2 + 1];
-      if (!(afterNew && !isPlace(afterNew) && (afterNew as RouteSegment).travelMode)) {
-        const seg = await buildSeg(newPlace, items[nextIdx2] as Place);
-        items.splice(idx2 + 1, 0, seg);
+    if (nextIdx >= 0 && hasRoutableCoord(items[nextIdx] as Place)) {
+      const segIdx = idx + 1;
+      const existing = items[segIdx];
+      const existingIsRoute = existing && !isPlace(existing) && !!(existing as RouteSegment).travelMode;
+      const shouldRewrite = mode === 'insert-if-missing' ? !existingIsRoute : existingIsRoute;
+      if (shouldRewrite) {
+        const travelMode: RouteSegment['travelMode'] =
+          existingIsRoute ? (existing as RouteSegment).travelMode : 'drive';
+        const seg = await buildSeg(targetPlace, items[nextIdx] as Place, travelMode);
+        if (seg) {
+          if (existingIsRoute) items[segIdx] = seg;
+          else items.splice(segIdx, 0, seg);
+        }
       }
     }
   };
@@ -174,37 +205,51 @@ export function usePlaceMutations({
     const folder = (filePath.split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
 
     const isEditMode = !!(editInitial && editInitial.name);
-    const alwaysSeparate = settings?.alwaysSeparatePlaceSchedule !== false;
-
-    let multiRef = false;
-    if (isEditMode && editInitial?.name) {
-      try {
-        const refs = await repository.findRoadmapsReferencingPlace(editInitial.name);
-        multiRef = refs.filter(p => p !== filePath).length > 0;
-      } catch (e) { console.warn('[usePlaceMutations] findRoadmapsReferencingPlace failed', e); }
-    }
-    const separate = alwaysSeparate || multiRef;
-
+    // 架构决策：place 文件可跨 trip 复用，per-trip 的 start_time/end_time
+    // 永远写在 trip 文件里作为 wikilink 后的覆盖行，不污染 place 文件。
+    // 这里 detail 同时带上 start_time/end_time 是为了让 updateRoadmapItems
+    // 直接 inline 写入；旧的 updatePlaceScheduleInRoadmap 二次写入路径只
+    // 能锁定第一个同名 wikilink，对同名重复（如一条 trip 中两个 [[赛里木湖]]）
+    // 会写错位置，所以这条 UI 写路径不再使用它。
     const place: Place = {
       id: payload.name,
       name: payload.name,
-      detail: separate ? {
+      detail: {
         description: payload.description,
         address: payload.address as Address | undefined,
-      } : {
-        start_time: payload.start_time,
-        end_time: payload.end_time,
-        description: payload.description,
-        address: payload.address as Address | undefined,
+        start_time: payload.start_time || undefined,
+        end_time: payload.end_time || undefined,
       },
     };
     try {
-      if (separate && isEditMode && editInitial?.name) {
+      if (isEditMode && editInitial?.name) {
         const origDest = app.metadataCache.getFirstLinkpathDest(editInitial.name, filePath);
         if (origDest && origDest instanceof TFile) {
           if (payload.name !== editInitial.name) {
-            const newPath = `${folder}/${payload.name}.md`;
-            try { await app.fileManager.renameFile(origDest, newPath); } catch (e) { console.warn('[usePlaceMutations] renameFile failed', e); new Notice('地点重命名失败'); }
+            // 静默改名：app.fileManager.renameFile 会触发 Obsidian 的"自动更新内部
+            // 链接"弹窗（用户设置为 Prompt 时），但用户已经在我们的 modal 里确认
+            // 过保存，不该再被问一次。改用 vault.rename + 手动重写其它 trip 文件
+            // 里的 [[oldName]] 引用。
+            const oldName = editInitial.name;
+            const newName = payload.name;
+            const newPath = `${folder}/${newName}.md`;
+            try {
+              const referencingTrips = await repository.findRoadmapsReferencingPlace(oldName);
+              await app.vault.rename(origDest, newPath);
+              const re = new RegExp(`\\[\\[${oldName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}(\\|[^\\]]*)?\\]\\]`, 'g');
+              for (const tripPath of referencingTrips) {
+                // 当前 trip 紧接着会被 updateRoadmapItems 整体重写，跳过避免多余写入
+                if (tripPath === filePath) continue;
+                const tripFile = app.vault.getAbstractFileByPath(tripPath);
+                if (!tripFile || !(tripFile instanceof TFile)) continue;
+                const raw = await app.vault.read(tripFile);
+                const next = raw.replace(re, (_m, alias) => `[[${newName}${alias || ''}]]`);
+                if (next !== raw) await app.vault.modify(tripFile, next);
+              }
+            } catch (e) {
+              console.warn('[usePlaceMutations] rename failed', e);
+              new Notice(t('notice.placeRenameFailed'));
+            }
           }
           const finalDest = app.metadataCache.getFirstLinkpathDest(payload.name, filePath);
           if (finalDest && finalDest instanceof TFile) {
@@ -229,15 +274,26 @@ export function usePlaceMutations({
       }
     } catch (err) {
       console.warn('[usePlaceMutations] 保存地点文件失败', err);
-      new Notice('保存地点失败');
+      new Notice(t('notice.savePlaceFailed'));
       return;
     }
 
     const isEdit = !!(editInitial && editInitial.name);
     const originalName = isEdit ? editInitial!.name : null;
+    // 用 itemIndex 锁定要替换的具体位置，避免同名重复时误替换。
+    const editIndex = editInitial?.itemIndex;
+    const indexPointsToOriginal = (
+      typeof editIndex === 'number'
+      && editIndex >= 0
+      && editIndex < data.items.length
+      && isPlace(data.items[editIndex])
+      && (data.items[editIndex] as Place).name === originalName
+    );
 
     let nextItems: Array<Place | RouteSegment>;
     if (isEdit && originalName && originalName !== payload.name) {
+      // 改名场景：place 文件已重命名，所有指向旧名的 wikilink 都失效，整 trip 一起换。
+      // 同 trip 内的重复（罕见且改名后会全部指向新名）保持现状。
       nextItems = [];
       for (let i = 0; i < data.items.length; i++) {
         const it = data.items[i];
@@ -252,7 +308,12 @@ export function usePlaceMutations({
           nextItems.push(data.items[i]);
         }
       }
+    } else if (isEdit && originalName && indexPointsToOriginal) {
+      // 同名编辑：只替换 editIndex 指向的那一项。其它同名 place 保留各自的
+      // detail.start_time/detail.address 等。
+      nextItems = data.items.map((it, i) => (i === editIndex ? place : it));
     } else if (isEdit && originalName) {
+      // Fallback（itemIndex 缺失或失效）：保留旧行为按 name 匹配第一项。
       nextItems = data.items.map(it => {
         if (isPlace(it) && it.name === originalName) return place;
         return it;
@@ -260,57 +321,83 @@ export function usePlaceMutations({
     } else {
       const base = data.items || [];
       const newTime = payload.start_time ? new Date(payload.start_time).getTime() : NaN;
+      const newIsWishlist = isNaN(newTime);
       let insertIdx = base.length;
-      if (!isNaN(newTime)) {
+      if (!newIsWishlist) {
+        // 新增有日期的地点：插到 (a) 第一个日期更晚的地点之前，或
+        // (b) 第一个 wishlist（无 start_time 也无 days）地点之前 —— 任一更早即可。
+        // 保证 wishlist 永远在时间轴尾部。
         for (let i = 0; i < base.length; i++) {
           const it = base[i];
-          if (isPlace(it)) {
-            const t = it.detail?.start_time ? new Date(it.detail.start_time).getTime() : NaN;
-            if (!isNaN(t) && t > newTime) { insertIdx = i; break; }
-          }
+          if (!isPlace(it)) continue;
+          const p = it as Place;
+          const t = p.detail?.start_time ? new Date(p.detail.start_time).getTime() : NaN;
+          const isWishlist = isNaN(t) && p.detail?.days == null;
+          if (isWishlist || (!isNaN(t) && t > newTime)) { insertIdx = i; break; }
         }
       }
+      // 新增 wishlist 地点 → 默认 append 到尾部（insertIdx = base.length）
       nextItems = [...base.slice(0, insertIdx), place, ...base.slice(insertIdx)];
-      await autoInsertRoutesAroundNewPlace(nextItems, place);
+      await applyRoutesAroundPlace(nextItems, place, 'insert-if-missing');
+    }
+
+    // 编辑场景下坐标变了 → 强制重算前后已有 route segment（保留原 travelMode）。
+    if (isEdit) {
+      const oldA = editInitial?.address;
+      const newA = payload.address;
+      const newHasCoords =
+        typeof newA?.latitude === 'number' && typeof newA?.longitude === 'number';
+      const coordsChanged = newHasCoords && (
+        (oldA?.latitude ?? null) !== newA!.latitude ||
+        (oldA?.longitude ?? null) !== newA!.longitude
+      );
+      if (coordsChanged) {
+        await applyRoutesAroundPlace(nextItems, place, 'recompute');
+      }
     }
 
     try {
+      // start_time/end_time 已经写进 place.detail 由 updateRoadmapItems 落盘；
+      // 不再调用 updatePlaceScheduleInRoadmap（它的 first-match 语义在同名
+      // 重复时会写错位置）。该 API 仍保留供 RoadmapRepository 直接调用。
       await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, nextItems);
-      if (separate) {
-        await repository.updatePlaceScheduleInRoadmap(filePath, payload.name, {
-          start_time: payload.start_time || null,
-          end_time: payload.end_time || null,
-        });
-      }
       const r = await repository.loadRoadmap(filePath);
       setData(r);
     } catch (err) {
       console.warn('[usePlaceMutations] 更新路线文件失败', err);
-      new Notice('更新路线失败');
+      new Notice(t('notice.updateRoadmapFailed'));
     }
     setEditorVisible(false);
     setEditInitial(undefined);
   };
 
-  const editPlace = (p: Place) => {
+  const editPlace = (p: Place, itemIndex?: number) => {
     setEditInitial({
       name: p.name,
       start_time: p.detail?.start_time,
       end_time: p.detail?.end_time,
       description: p.detail?.description,
       address: p.detail?.address,
+      itemIndex,
     });
     setEditorVisible(true);
   };
 
-  const deletePlace = async (p: Place) => {
-    const modal = new ConfirmModal(`删除地点「${p.name}」？`, '删除', '取消', true);
+  const deletePlace = async (p: Place, itemIndex?: number) => {
+    const modal = new ConfirmModal(t('confirm.deletePlace', { name: p.name }), t('common.delete'), t('common.cancel'), true);
     const ok = await modal.open();
     if (!ok || !data) return;
+    // 同名重复时按 itemIndex 精确删除；否则回退到删第一个同名项。
+    const targetIdx = (
+      typeof itemIndex === 'number'
+      && itemIndex >= 0
+      && itemIndex < data.items.length
+      && isPlace(data.items[itemIndex])
+      && (data.items[itemIndex] as Place).name === p.name
+    ) ? itemIndex : data.items.findIndex(it => isPlace(it) && (it as Place).name === p.name);
     const remaining: Array<Place | RouteSegment> = [];
     for (let i = 0; i < data.items.length; i++) {
-      const it = data.items[i];
-      if (isPlace(it) && it.name === p.name) {
+      if (i === targetIdx) {
         const next = data.items[i + 1];
         if (isRouteSegment(next)) i++;
         continue;
@@ -323,7 +410,7 @@ export function usePlaceMutations({
       setData(r);
     } catch (err) {
       console.warn('[usePlaceMutations] 删除地点失败', err);
-      new Notice('删除失败');
+      new Notice(t('notice.deleteFailed'));
     }
   };
 
@@ -359,10 +446,10 @@ export function usePlaceMutations({
     if (!data) return;
     const folder = (filePath.split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
     const name = payload.name.trim();
-    if (!name) { new Notice('子路线名称不能为空'); return; }
+    if (!name) { new Notice(t('notice.subRoadmapNameRequired')); return; }
 
     const dup = (data.items || []).some(it => isPlace(it) && (it as Place).name === name);
-    if (dup) { new Notice('已有同名地点 / 子路线'); return; }
+    if (dup) { new Notice(t('notice.subRoadmapDuplicate')); return; }
 
     try {
       const subFile = await repository.saveSubRoadmapFile(folder, name, payload.detail);
@@ -372,10 +459,10 @@ export function usePlaceMutations({
       const r = await repository.loadRoadmap(filePath);
       setData(r);
       setSubRouteMap(prev => ({ ...prev, [name]: subFile.path }));
-      new Notice(`已创建子路线「${name}」`);
+      new Notice(t('notice.subRoadmapCreated', { name }));
     } catch (err) {
       console.warn('[usePlaceMutations] 创建子路线失败', err);
-      new Notice('创建子路线失败');
+      new Notice(t('notice.subRoadmapCreateFailed'));
     } finally {
       setSubRoadmapEditorVisible(false);
     }

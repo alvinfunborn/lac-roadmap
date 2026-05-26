@@ -4,6 +4,8 @@ import { MapProviderKind, RoadmapDetail, Place, RouteSegment, hasCoords } from '
 import DatePicker from '../DatePicker';
 import PlaceStaticMap, { PlacePoint } from '../PlaceStaticMap';
 import MapSelector from '../map/MapSelector';
+import { getPlaceStatus } from '../../utils/placeStatus';
+import { t } from '../../i18n';
 
 export interface RoadmapEditPayload {
   name: string;
@@ -75,7 +77,7 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
 
   const handleSave = () => {
     if (!name.trim()) {
-      setNameError('名称不能为空');
+      setNameError(t('modal.common.nameRequired'));
       return;
     }
     setNameError('');
@@ -124,13 +126,14 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
         longitude: loc.longitude,
         latitude: loc.latitude,
         coordinate_system: loc.coordinate_system,
+        status: getPlaceStatus(p),
       };
     });
   }, [placesWithCoords]);
 
   if (!visible) return null;
 
-  const titleStatus = mode === 'create' ? 'draft' : 'editing';
+  const titleStatus = mode === 'create' ? t('modal.trip.status.draft') : t('modal.trip.status.editing');
   const startDate = start ? start.slice(0, 10) : '';
   const endDate   = end   ? end.slice(0, 10)   : '';
 
@@ -139,10 +142,10 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
       <div className="lac-confirm-modal lac-place-edit-modal lac-trip-edit-modal" onClick={(e) => e.stopPropagation()}>
         <div className="lac-confirm-content">
           <div className="lac-confirm-eyebrow lac-eyebrow">
-            {mode === 'create' ? 'new trip · 新路线' : 'edit trip · 编辑路线'}
+            {mode === 'create' ? t('modal.trip.create.eyebrow') : t('modal.trip.edit.eyebrow')}
           </div>
           <h2 className="lac-confirm-title-serif lac-serif lac-trip-title">
-            {name || (mode === 'create' ? '新路线' : initial?.name || '路线')}
+            {name || (mode === 'create' ? t('modal.trip.create.title') : initial?.name || t('modal.trip.fallback.title'))}
             <span className="lac-trip-title-status"> · {titleStatus}</span>
           </h2>
 
@@ -150,13 +153,13 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
             {/* NAME */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">name</span>
-                <span className="lac-place-where-hint">required</span>
+                <span className="lac-eyebrow">{t('modal.place.section.name')}</span>
+                <span className="lac-place-where-hint">{t('modal.trip.section.required')}</span>
               </div>
               <input
                 type="text"
                 value={name}
-                placeholder="路线名称"
+                placeholder={t('modal.trip.placeholder.name')}
                 className={`lac-place-name-input lac-trip-name-input${nameError ? ' lac-input-error' : ''}`}
                 onChange={(e) => { setNameError(''); setName(e.target.value); }}
                 autoFocus
@@ -167,11 +170,11 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
             {/* NOTES */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">notes</span>
+                <span className="lac-eyebrow">{t('modal.place.section.notes')}</span>
               </div>
               <textarea
                 value={desc}
-                placeholder="路线描述"
+                placeholder={t('modal.trip.placeholder.notes')}
                 className="lac-place-notes-input"
                 onChange={(e) => setDesc(e.target.value)}
               />
@@ -180,16 +183,16 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
             {/* WHEN — date → date in one mono line, optional `N nights` summary */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">when</span>
-                {nights > 0 && <span className="lac-place-where-hint">{nights} nights</span>}
+                <span className="lac-eyebrow">{t('modal.place.section.when')}</span>
+                {nights > 0 && <span className="lac-place-where-hint">{t('modal.trip.nights', { n: nights })}</span>}
               </div>
               <div className="lac-trip-when-row">
                 <button type="button" className="lac-place-when-date lac-trip-when-date" onClick={() => setDatePickerVisibleFor('start')}>
-                  {startDate || <span className="lac-place-when-placeholder">起始日期</span>}
+                  {startDate || <span className="lac-place-when-placeholder">{t('modal.trip.placeholder.startDate')}</span>}
                 </button>
                 <span className="lac-place-when-arrow">→</span>
                 <button type="button" className="lac-place-when-date lac-trip-when-date" onClick={() => setDatePickerVisibleFor('end')}>
-                  {endDate || <span className="lac-place-when-placeholder">结束日期</span>}
+                  {endDate || <span className="lac-place-when-placeholder">{t('modal.trip.placeholder.endDate')}</span>}
                 </button>
               </div>
             </section>
@@ -198,23 +201,23 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
                 终点（read-only），右侧缩略图自动适配整条路线的所有地点。 */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">where</span>
+                <span className="lac-eyebrow">{t('modal.place.section.where')}</span>
                 {placesWithCoords.length > 0 && (
-                  <span className="lac-place-where-hint">{placesWithCoords.length} pts</span>
+                  <span className="lac-place-where-hint">{t('modal.trip.pts', { n: placesWithCoords.length })}</span>
                 )}
               </div>
               <div className="lac-place-where-row">
                 <div className="lac-place-where-text">
                   {placesWithCoords.length === 0 ? (
-                    <div className="lac-place-where-coords">尚无带坐标的地点</div>
+                    <div className="lac-place-where-coords">{t('modal.trip.noPlaces')}</div>
                   ) : (
                     <>
                       <div className="lac-trip-endpoint">
-                        <span className="lac-trip-endpoint-label">start</span>
+                        <span className="lac-trip-endpoint-label">{t('modal.trip.endpoint.start')}</span>
                         <span className="lac-trip-endpoint-name">{startPlace!.name}</span>
                       </div>
                       <div className="lac-trip-endpoint">
-                        <span className="lac-trip-endpoint-label">end</span>
+                        <span className="lac-trip-endpoint-label">{t('modal.trip.endpoint.end')}</span>
                         <span className="lac-trip-endpoint-name">{endPlace!.name}</span>
                       </div>
                     </>
@@ -226,7 +229,12 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
                   // 整条路线，而不是只聚焦在 currentIndex 那一个点上。
                   const placePoints: PlacePoint[] = placesWithCoords.map(p => {
                     const loc = p.detail!.address as MapLocation;
-                    return { lat: loc.latitude!, lng: loc.longitude!, coordinate_system: loc.coordinate_system };
+                    return {
+                      lat: loc.latitude!,
+                      lng: loc.longitude!,
+                      coordinate_system: loc.coordinate_system,
+                      status: getPlaceStatus(p),
+                    };
                   });
                   const hasAnyCoord = placePoints.length > 0;
                   const effectiveProvider = mapProvider === FOLLOW_GLOBAL
@@ -237,7 +245,7 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
                     return (
                       <div
                         className="lac-place-where-thumb lac-trip-where-thumb"
-                        aria-label="路线总览缩略图"
+                        aria-label={t('modal.trip.thumbAria')}
                       >
                         <span className="lac-place-where-thumb-label">map</span>
                       </div>
@@ -248,7 +256,7 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
                       type="button"
                       className="lac-place-where-thumb lac-trip-where-thumb lac-trip-where-thumb--clickable"
                       onClick={() => setViewerVisible(true)}
-                      aria-label="点开查看路线全景地图"
+                      aria-label={t('modal.trip.viewerAria')}
                     >
                       <PlaceStaticMap
                         places={placePoints}
@@ -268,8 +276,8 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
             {/* PROVIDER */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
-                <span className="lac-eyebrow">provider</span>
-                {mapProvider === FOLLOW_GLOBAL && <span className="lac-place-where-hint">follow global</span>}
+                <span className="lac-eyebrow">{t('modal.trip.section.provider')}</span>
+                {mapProvider === FOLLOW_GLOBAL && <span className="lac-place-where-hint">{t('modal.trip.provider.followGlobal')}</span>}
               </div>
               <div className="lac-trip-provider">
                 <span className="lac-trip-provider-dot" />
@@ -289,11 +297,11 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
 
           <div className="lac-place-actions">
             {mode === 'edit' && onDelete ? (
-              <button type="button" className="lac-btn lac-btn-danger lac-place-action-delete" onClick={onDelete}>delete</button>
+              <button type="button" className="lac-btn lac-btn-danger lac-place-action-delete" onClick={onDelete}>{t('modal.trip.delete.button')}</button>
             ) : <span className="lac-place-action-spacer" />}
             <div className="lac-place-action-trailing">
-              <button type="button" className="lac-btn lac-btn-cancel" onClick={onCancel}>cancel</button>
-              <button type="button" className="lac-btn lac-btn-confirm" onClick={handleSave}>{mode === 'create' ? 'create' : 'save'}</button>
+              <button type="button" className="lac-btn lac-btn-cancel" onClick={onCancel}>{t('modal.trip.cancel')}</button>
+              <button type="button" className="lac-btn lac-btn-confirm" onClick={handleSave}>{mode === 'create' ? t('modal.trip.create.button') : t('modal.trip.save.button')}</button>
             </div>
           </div>
         </div>
@@ -319,7 +327,11 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
         visible={viewerVisible}
         onCancel={() => setViewerVisible(false)}
         onConfirm={() => setViewerVisible(false)}
-        settings={settings}
+        settings={{
+          ...settings,
+          // 用 trip 当前选定的 provider 覆盖全局；FOLLOW_GLOBAL 时落回全局值
+          mapApiProvider: mapProvider === FOLLOW_GLOBAL ? settings.mapApiProvider : mapProvider,
+        }}
         routeLocations={viewerLocations}
         readOnly={true}
       />

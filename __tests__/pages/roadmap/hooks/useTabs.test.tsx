@@ -102,17 +102,17 @@ describe('useTabs', () => {
     expect(result.current.tabs.filteredKeys).toEqual(['2025-11-01', '2025-11-02']);
   });
 
-  it('selecting "unplanned" includes all non-date keys', () => {
+  it('selecting "unplanned" selects only the wishlist bucket (empty key); explicit 第N天 keeps its own tab', () => {
     const r: Roadmap = {
       id: 'r', name: 'r',
       items: [
         makePlace('a', { start_time: '2025-11-01' }),
-        makePlace('b'),
+        makePlace('b'), // wishlist: no start_time, no days
       ],
     };
     const { result } = renderHook(() => useTabsForRoadmap(r));
     act(() => { result.current.tabs.onToggleTab('unplanned'); });
-    expect(result.current.tabs.filteredKeys).toContain('第1天');
+    expect(result.current.tabs.filteredKeys).toEqual(['']);
   });
 
   it('visibleItemIndices: returns items only from filtered day groups', () => {
