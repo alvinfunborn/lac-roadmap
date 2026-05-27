@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Roadmap, Place, RouteSegment } from '../../../types/roadmap';
 import { isPlace, isRouteSegment } from '../../../utils/typeGuards';
-import { compareGroupKey, isDateKey } from '../../../utils/date';
+import { compareGroupKey, isDateKey, formatYMD } from '../../../utils/date';
 import { PlaceStatus, getPlaceStatus } from '../../../utils/placeStatus';
 import { t } from '../../../i18n';
 
@@ -29,17 +29,11 @@ export interface TabsApi {
   filteredPlaces: Place[];
   mapLocations: { lng: number; lat: number; title: string; coordinate_system?: string; travelModeToNext?: RouteSegment['travelMode']; status?: PlaceStatus }[];
   visibleItemIndices: number[];
-  /** 将某 key 从当前位置移动到目标 key 之前/之后（session-only；TODO 持久化） */
-  reorderTab: (fromKey: string, toKey: string) => void;
 }
 
 /** 标签/筛选/可见项的集中状态 */
 export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams): TabsApi {
   const [selectedTabs, setSelectedTabs] = useState<Set<string>>(() => new Set());
-  // session-only 的 tab 顺序覆盖（key 列表）。
-  // TODO(Wave 3+): 持久化方案 — 将 tab 顺序落到 roadmap 的 detail.day_order 或修改 items 中
-  // "第N天"段的整体相对位置；当前 Wave 仅保存在 session 内，刷新页面会回退到默认排序。
-  const [tabOrderOverride, setTabOrderOverride] = useState<string[] | null>(null);
 
   const onToggleTab = (id: string) => {
     setSelectedTabs(prev => {
@@ -49,35 +43,31 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams)
     });
   };
 
+  // Tabs are always sorted by time — date keys ascending, 第N天 by N, unplanned
+  // last. (Previously had a session-only override for drag-to-reorder; that
+  // gesture now batch-rewrites place dates instead, so order is fully derived.)
+  //
+  // Date continuity: between the earliest and latest known date keys (from
+  // both real groups and user-added temp days) we fill in every missing day
+  // so the strip reads as a contiguous calendar. The empty days have no
+  // entries in `groups`, so downstream `groups[k] || []` lookups give back
+  // an empty array — counts render as 0 and clicking the tab filters to
+  // nothing, which is the expected behavior.
   const allKeysForTabs = useMemo(() => {
     const base = [...groupKeys, ...tempDayKeys].sort(compareGroupKey);
-    if (!tabOrderOverride || tabOrderOverride.length === 0) return base;
-    const baseSet = new Set(base);
-    const ordered: string[] = [];
-    // 先按 override 顺序放置仍存在的 key
-    for (const k of tabOrderOverride) {
-      if (baseSet.has(k)) { ordered.push(k); baseSet.delete(k); }
+    const dates = base.filter(isDateKey).sort();
+    if (dates.length < 2) return base;
+    const filled = new Set(base);
+    const [fy, fm, fd] = dates[0].split('-').map(Number);
+    const [ly, lm, ld] = dates[dates.length - 1].split('-').map(Number);
+    const cursor = new Date(fy, fm - 1, fd);
+    const end = new Date(ly, lm - 1, ld);
+    while (cursor.getTime() < end.getTime()) {
+      cursor.setDate(cursor.getDate() + 1);
+      filled.add(formatYMD(cursor));
     }
-    // 将新增的（override 未覆盖的）按默认顺序追加
-    for (const k of base) {
-      if (baseSet.has(k)) ordered.push(k);
-    }
-    return ordered;
-  }, [groupKeys, tempDayKeys, tabOrderOverride]);
-
-  const reorderTab = (fromKey: string, toKey: string) => {
-    if (fromKey === toKey) return;
-    setTabOrderOverride(prev => {
-      const source = prev && prev.length ? prev.slice() : allKeysForTabs.slice();
-      const fi = source.indexOf(fromKey);
-      const ti = source.indexOf(toKey);
-      if (fi < 0 || ti < 0) return prev;
-      const [moved] = source.splice(fi, 1);
-      const insertAt = source.indexOf(toKey);
-      source.splice(insertAt, 0, moved);
-      return source;
-    });
-  };
+    return Array.from(filled).sort(compareGroupKey);
+  }, [groupKeys, tempDayKeys]);
 
   const tabDefs = useMemo<TabDef[]>(() => {
     const defs: TabDef[] = [];
@@ -188,6 +178,5 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams)
     filteredPlaces,
     mapLocations,
     visibleItemIndices,
-    reorderTab,
   };
 }

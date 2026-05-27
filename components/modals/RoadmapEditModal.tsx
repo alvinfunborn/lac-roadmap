@@ -44,36 +44,44 @@ const PROVIDER_META: Record<string, string> = {
   gaode: 'GCJ-02 · CN',
 };
 
-function diffNights(startISO: string, endISO: string): number {
-  if (!startISO || !endISO) return 0;
-  const s = new Date(startISO.slice(0, 10));
-  const e = new Date(endISO.slice(0, 10));
-  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
-  return Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000));
+/** 派生：items 中第一个有 start_time 的 place 的日期部分（YYYY-MM-DD）。
+ *  trip 不再单独维护 start_time —— 显示与编辑都以首个地点的日期为准。 */
+function firstPlaceDate(items: Array<Place | RouteSegment> | undefined): string {
+  if (!items) return '';
+  for (const it of items) {
+    if (it && typeof it === 'object' && 'name' in it && 'detail' in it) {
+      const p = it as Place;
+      const st = p.detail?.start_time;
+      if (st) return String(st).slice(0, 10);
+    }
+  }
+  return '';
 }
 
 export default function RoadmapEditModal({ visible, initial, mode, settings, onCancel, onConfirm, onDelete, items }: Props) {
   const [name, setName] = useState(initial?.name || '');
   const [desc, setDesc] = useState(initial?.detail?.description || '');
-  const [start, setStart] = useState(initial?.detail?.start_time || '');
-  const [end, setEnd] = useState(initial?.detail?.end_time || '');
+  const [start, setStart] = useState('');
   const [mapProvider, setMapProvider] = useState<string>(initial?.detail?.map_provider || FOLLOW_GLOBAL);
-  const [datePickerVisibleFor, setDatePickerVisibleFor] = useState(null as null | 'start' | 'end');
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [nameError, setNameError] = useState('');
   // 缩略图点开后的「只读全景地图」遮罩。仅在 items 里至少有一个带坐标的
   // 地点时才开放（thumb 为 placeholder 时不开）。Esc / 背景点击关闭。
   const [viewerVisible, setViewerVisible] = useState(false);
 
+  const derivedStart = useMemo(() => firstPlaceDate(items), [items]);
+
   useEffect(() => {
     if (visible) {
       setName(initial?.name || '');
       setDesc(initial?.detail?.description || '');
-      setStart(initial?.detail?.start_time || '');
-      setEnd(initial?.detail?.end_time || '');
+      // start 从 items 派生 —— 用户改它会触发全部地点日期顺移（saveMetaEditor）。
+      // 没有任何 dated place 时回退到 detail.start_time（旧数据兼容），最后空串。
+      setStart(derivedStart || initial?.detail?.start_time?.slice(0, 10) || '');
       setMapProvider(initial?.detail?.map_provider || FOLLOW_GLOBAL);
       setNameError('');
     }
-  }, [visible, initial]);
+  }, [visible, initial, derivedStart]);
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -82,19 +90,16 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
     }
     setNameError('');
     // 路线不再有自己的「点」(detail.address)；它的位置就是 items 序列。
-    // start / end 都是从 items 计算出来的派生属性，不在这里写入。
+    // end_time 已经从 UI 里彻底拿掉（它必然等于末位 place 的日期，没有独立含义），
+    // saveMetaEditor 落盘前会按 items 重新派生 start_time / end_time 写回 detail。
     const detail: RoadmapDetail = {};
     if (desc) detail.description = desc;
     if (start) detail.start_time = start;
-    if (end) detail.end_time = end;
     if (mapProvider && mapProvider !== FOLLOW_GLOBAL) {
       detail.map_provider = mapProvider as MapProviderKind;
     }
     onConfirm({ name: name.trim(), detail });
   };
-
-  // Derived display state.
-  const nights = useMemo(() => diffNights(start, end), [start, end]);
 
   // 从 items 计算路线的「起点 / 终点」—— 取第一个 / 最后一个已地理编码的地点
   // (with both lat & lng)。这两个量等同于 Roadmap.startPoint / endPoint
@@ -135,7 +140,6 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
 
   const titleStatus = mode === 'create' ? t('modal.trip.status.draft') : t('modal.trip.status.editing');
   const startDate = start ? start.slice(0, 10) : '';
-  const endDate   = end   ? end.slice(0, 10)   : '';
 
   return (
     <div className="lac-confirm-mask" onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}>
@@ -180,19 +184,16 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
               />
             </section>
 
-            {/* WHEN — date → date in one mono line, optional `N nights` summary */}
+            {/* WHEN — only the start date. End date was removed (always equals
+                the last place's date — no independent meaning). Editing start
+                shifts ALL places by the resulting delta in saveMetaEditor. */}
             <section className="lac-place-section">
               <div className="lac-place-section-head">
                 <span className="lac-eyebrow">{t('modal.place.section.when')}</span>
-                {nights > 0 && <span className="lac-place-where-hint">{t('modal.trip.nights', { n: nights })}</span>}
               </div>
               <div className="lac-trip-when-row">
-                <button type="button" className="lac-place-when-date lac-trip-when-date" onClick={() => setDatePickerVisibleFor('start')}>
+                <button type="button" className="lac-place-when-date lac-trip-when-date" onClick={() => setDatePickerVisible(true)}>
                   {startDate || <span className="lac-place-when-placeholder">{t('modal.trip.placeholder.startDate')}</span>}
-                </button>
-                <span className="lac-place-when-arrow">→</span>
-                <button type="button" className="lac-place-when-date lac-trip-when-date" onClick={() => setDatePickerVisibleFor('end')}>
-                  {endDate || <span className="lac-place-when-placeholder">{t('modal.trip.placeholder.endDate')}</span>}
                 </button>
               </div>
             </section>
@@ -308,19 +309,11 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
       </div>
 
       <DatePicker
-        visible={!!datePickerVisibleFor}
-        value={(datePickerVisibleFor === 'start' ? start : end) || ''}
-        onCancel={() => setDatePickerVisibleFor(null)}
-        onClear={() => {
-          if (datePickerVisibleFor === 'start') setStart('');
-          else if (datePickerVisibleFor === 'end') setEnd('');
-          setDatePickerVisibleFor(null);
-        }}
-        onConfirm={(val) => {
-          if (datePickerVisibleFor === 'start') setStart(val);
-          else if (datePickerVisibleFor === 'end') setEnd(val);
-          setDatePickerVisibleFor(null);
-        }}
+        visible={datePickerVisible}
+        value={start}
+        onCancel={() => setDatePickerVisible(false)}
+        onClear={() => { setStart(''); setDatePickerVisible(false); }}
+        onConfirm={(val) => { setStart(val); setDatePickerVisible(false); }}
       />
 
       <MapSelector

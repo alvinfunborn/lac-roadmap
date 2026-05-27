@@ -42,11 +42,21 @@ export default function Timeline({
   subEndpoints, cardListRef, didDragRef, lastDraggedItemRef,
   onPlaceClick, onEditRoute,
 }: Props) {
-  // DAY n numbering for date keys; non-date keys (`第N天`) keep their label.
+  // DAY n numbering for date keys — anchored to the earliest dated group,
+  // measured as calendar-day offset (+1, so the earliest = Day 1). Counting
+  // sequentially over groupKeys would mis-number when the trip has gap days
+  // with no places (e.g. 05-01 / 05-03 / 05-05 → 1,2,3 instead of 1,3,5).
   const dayNumberMap = new Map<string, number>();
-  let dn = 0;
-  for (const k of groupKeys) {
-    if (isDateKey(k)) { dn++; dayNumberMap.set(k, dn); }
+  const dateKeys = groupKeys.filter(isDateKey);
+  if (dateKeys.length > 0) {
+    const sortedDateKeys = [...dateKeys].sort();
+    const [ey, em, ed] = sortedDateKeys[0].split('-').map(Number);
+    const anchorMs = new Date(ey, em - 1, ed).getTime();
+    for (const k of dateKeys) {
+      const [y, mo, d] = k.split('-').map(Number);
+      const offsetDays = Math.round((new Date(y, mo - 1, d).getTime() - anchorMs) / 86400000);
+      dayNumberMap.set(k, offsetDays + 1);
+    }
   }
   // 非日期 key 形如 `第${i}天` —— 取出数字以便用本地化标签替换。
   const extractDayN = (k: string): number | null => {

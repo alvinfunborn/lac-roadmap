@@ -128,6 +128,61 @@
 - 用户 Vault 数据一致性问题（§8.2.3 / §8.2.6）属于数据治理，不在代码范围（Wave 1 已修当时存在的重复 `[[秋叶原]]`）
 - 路径规划失败时的离线 fallback（当前为 Notice 提示，后续可考虑用直线距离作为默认值）
 
+## v1.4.2 — 日期标签直接编辑 + trip 时间派生（2026-05-28）
+
+### Day-tab 直接编辑日期：长按 + 拖拽 + clear
+
+`pages/roadmap/components/DayTabsStrip.tsx` 重写交互层（继续走 PointerEvents，不接入 Sortable.js，因为标签栏本就是按时间排序的纯派生 UI，没有 reorder 语义）。
+
+- **长按 500ms** 触发，未移动 → 释放在原 tab → 弹 `DatePicker`：
+  - 日期 tab：picker 预填该日期 → confirm 改组内所有 place 的 `start_time` 日期部分（time-of-day 保留），同步重写 `tempDayKeys`
+  - 第N天 tab：picker 无预填 → confirm 一次性把所有 `detail.days = K` 的 place 展开成具体日期（new + (K-N)），清掉 days，规划态切到具体态
+  - 未排 tab：picker confirm 给所有 wishlist place 设上 `start_time`
+  - **clear 按钮**：日期 tab 清掉组内 `start_time` + `end_time`；第N天 tab 清 `days`；wishlist 化。`tempDayKeys` 里同名 key 一并擦掉
+- **长按 + 拖到另一个 tab** → 两组日期/days 互换（不是合并，标签栏本来就按时间排，互换才是用户心智）：
+  - date ↔ date：两组 place 的日期部分互换，time-of-day 各自保留
+  - 第N天 ↔ 第X天：两组 place 的 days 值互换
+  - 任一端是 unplanned / 混合 (date ↔ 第N天)：no-op，留给长按编辑
+- 拖拽视效对齐 Sortable.js 卡片：长按触发后 `cloneNode` 出一个 `position: fixed` clone 跟随光标走（drop shadow + scale 1.05 + gold 描边），源 tab 变 ghost (opacity 0.35 + gold tint)，hover 目标 tab 包一圈 1.5px gold inset。8px 位移阈值防止横滑标签栏被劫持成拖拽
+- 取消了之前 session-only 的 `reorderTab` / `tabOrderOverride`：标签栏永远按 `compareGroupKey` 排序，无序状态去除
+
+### 日期标签连续填充（无地点日仍占位）
+
+`useTabs.allKeysForTabs` 取出已有 date keys 的 min/max，用 `formatYMD` 一天天补齐中间空缺。空白日 `groups[k]` 是 undefined，下游 `(groups[k] || [])` 全得空数组，count 显示 0，filter / map 不会产任何点。少于 2 个 date key（单日 / 全 第N天 / 全 wishlist）不补齐。
+
+Timeline 的 DAY-N eyebrow 同步改为按"最早 date key 起的 calendar-day 偏移 + 1"算，而不是 sequential 累加 `groupKeys` —— 05-01 / 05-03 / 05-05 这种带空白日的场景，时间轴里现在正确显示 DAY 1 / DAY 3 / DAY 5。
+
+### Trip 编辑器：start_date 顺移 + 移除 end_date
+
+`components/modals/RoadmapEditModal.tsx`：
+
+- 删 `end_time` 状态 / UI / 箭头 / nights 显示。end_date 必然等于末位 place 的日期，没有独立编辑含义
+- start_date 从 items 派生（首个有 `start_time` 的 place 的日期），picker 简化为单输入
+- `pages/roadmap/index.tsx:saveMetaEditor` 检测 newStart vs oldAnchor（首 place 日期）的 delta：
+  - 都有且不等 → 全部有 `start_time` 的 place（含 end_time）顺移 delta 天，time-of-day 保留
+  - newStart 有 / oldAnchor 无（全 第N天 规划态）→ 把 `days=N` 展开成 `newStart + (N-1)` 天，清 days
+- 落盘走 `updateRoadmapItems`（一次写完 header + items），不再走 `updateRoadmapMeta` 两次写
+
+### Trip-level `detail.start_time` / `end_time` 在 load 时派生
+
+历史 bug：通过长按 tab clear / 拖拽互换 / 长按改日期 这些路径修改 place 日期后，trip 顶部 header 的 daterange 显示不变 —— 因为这些路径只重写 items，trip TOML header 的 `detail.start_time` 还停在旧值，header 读的就是旧值。
+
+修复在 `RoadmapRepository.loadRoadmap`：load 完 items 后，扫一遍所有 dated place 取 min/max 日期，覆盖到 `derivedDetail.start_time` / `end_time`（无 dated place 就 delete）。TOML header 里那两个字段成为 stale cache，每次 load 重新派生，header / roadmapset 排序 / stats 自动一致，下次任何写都把派生值再写回。
+
+### Place 文件不再承载 per-trip 时间字段
+
+历史 bug：clear 中段日期时看着没变化，但末日 clear 正常 —— 因为 load 时 `pData.detail.start_time` 是从 place 文件读的，trip 文件里的覆盖行只是叠在上面；删覆盖，place 文件里的旧值就"复活"。最后一天偶尔正常是因为那个 place 文件恰好没残留。
+
+`RoadmapRepository`：
+- `loadRoadmap`：parse 完 place 文件 detail 后，先 `delete detail.start_time / end_time`，再让 trip 覆盖行写入 → trip 文件成了 per-trip 时间的唯一源头
+- `placeToToml`：写 place 文件前抹掉 `start_time / end_time / days` 三个 per-trip 字段，新写的 place 文件不会再带这些污染（架构注释一直要求如此，但 save 没强制）
+
+旧测试改：原本"靠 place 文件读 start_time"那条用例改成走 trip override；新增一条 case 锁死 place-file 残留必须被丢弃。
+
+### 顶部 header 微调
+
+`RoadmapHeader.tsx`：返回按钮从 eyebrow-row (TRIP 旁) 搬到 title-row (h1 左)，更近主标识更好点。点击隔离：按钮 `stopPropagation + onBack`，h1 / daterange 自己挂 `onOpenMetaEditor`。CSS 用 `align-self: center` 把方形按钮在 baseline 行里居中，hover/cursor 拆到 h1 + daterange 各自身上。
+
 ## v1.4.1 — 移动端长按再拖（2026-05-27）
 
 `pages/roadmap/hooks/usePlaceDragDrop.ts` 与 `pages/roadmapset/index.tsx` 两处 Sortable.js 配置加 `delay: 500` + `delayOnTouchOnly: true` + `touchStartThreshold: 5`。修复：移动端手指一碰卡片就进入拖拽态、整页滚动被吃掉。鼠标侧仍然即触即拖；触摸侧必须长按 500ms 才开始拖拽，长按期间出现 ≥5px 滑动直接放弃拖拽走滚动；短按继续走 onClick 打开编辑。

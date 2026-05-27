@@ -69,16 +69,23 @@
   &:active { background: transparent !important; transform: translateY(1px); box-shadow: none !important; }
 }
 
-// Title row: serif h1 + mono date range, status-tinted h1.
+// Title row: back btn + serif h1 + mono date range, status-tinted h1. The
+// back button lives here (not in the eyebrow row) so it sits next to the
+// title — easier to hit and visually anchored to the page identity rather
+// than the small "TRIP" label.
 .lac-roadmap-title-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 4px;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-  &:hover { opacity: 0.85; }
+  // The back button has its own click target; the row itself isn't a single
+  // click surface anymore. Title + daterange each carry their own pointer
+  // affordance via inline onClick + the hover rule below.
+  .lac-roadmap-back {
+    align-self: center; // box has no text baseline; center it against the title row
+    flex: 0 0 auto;
+  }
 }
 .lac-roadmap-title {
   margin: 0;
@@ -91,6 +98,9 @@
   text-overflow: ellipsis;
   flex: 1 1 auto;
   min-width: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  &:hover { opacity: 0.85; }
 }
 .lac-roadmap-title--done { color: var(--done); }
 .lac-roadmap-title--plan { color: var(--plan); }
@@ -101,6 +111,9 @@
   color: var(--text-3);
   letter-spacing: 0.04em;
   white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  &:hover { opacity: 0.85; }
 }
 
 // Italic serif description — quiet "field notes" feel under the title.

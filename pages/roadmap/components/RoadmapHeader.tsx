@@ -60,16 +60,27 @@ export default function RoadmapHeader({
   return (
     <>
       <div className="lac-roadmap-eyebrow-row">
-        <button type="button" className="lac-roadmap-back" onClick={onBack} title={t('page.roadmap.back')} aria-label={t('page.roadmap.back')}>
+        <div className="lac-eyebrow lac-roadmap-eyebrow">{t('page.roadmap.eyebrow')}</div>
+      </div>
+      <div className="lac-roadmap-title-row">
+        <button
+          type="button"
+          className="lac-roadmap-back"
+          onClick={(e) => { e.stopPropagation(); onBack(); }}
+          title={t('page.roadmap.back')}
+          aria-label={t('page.roadmap.back')}
+        >
           <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
             <polyline points="10 4 6 8 10 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div className="lac-eyebrow lac-roadmap-eyebrow">{t('page.roadmap.eyebrow')}</div>
-      </div>
-      <div className="lac-roadmap-title-row" onClick={onOpenMetaEditor}>
-        <h1 className={`lac-serif lac-roadmap-title lac-roadmap-title--${kind}`}>{data?.name || filePath}</h1>
-        {dateRange && <span className="lac-mono lac-roadmap-daterange">{dateRange}</span>}
+        <h1
+          className={`lac-serif lac-roadmap-title lac-roadmap-title--${kind}`}
+          onClick={onOpenMetaEditor}
+        >{data?.name || filePath}</h1>
+        {dateRange && (
+          <span className="lac-mono lac-roadmap-daterange" onClick={onOpenMetaEditor}>{dateRange}</span>
+        )}
       </div>
       {data?.detail?.description && (
         <div className="lac-serif lac-roadmap-desc">{data.detail.description}</div>

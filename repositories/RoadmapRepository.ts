@@ -101,6 +101,13 @@ export class RoadmapRepository {
               name: pData.name || linkTarget,
               detail: pData.detail || {}
             };
+            // start_time / end_time 是 per-trip 字段（架构约定写在 trip 文件
+            // 的 [[wikilink]] 覆盖行里，不污染 place 文件）。这里先把可能残留
+            // 在 place 文件 detail 里的旧字段抹掉，再单独应用 trip 覆盖 ——
+            // 否则在 trip 文件清掉覆盖（如长按日期 tab 的 clear）后，旧的
+            // place-file 值会"重新冒出来"，造成日期看着没被清掉的假象。
+            delete place.detail.start_time;
+            delete place.detail.end_time;
             // 覆盖：若 roadmap 文档中紧随该 wikilink 行包含 start_time / end_time，则写入 place.detail
             if (i + 1 < lines.length) {
               const lookahead: string[] = [];
@@ -152,10 +159,34 @@ export class RoadmapRepository {
     // entry/exit points over the wide trip-level address (e.g. "厦门"
     // is a region; the first place is what you actually drive to).
     const { start, end } = computeRoadmapEndpoints(items);
+
+    // Derive trip-level start_time / end_time from dated places. The TOML
+    // header value is treated as a stale cache — every consumer (header
+    // daterange, roadmapset sorting, stats) reads through this derivation
+    // so changes via tab clear / drag / long-press auto-reflect without
+    // an extra "rewrite the header" step on every place-date mutation.
+    // Places whose date includes time-of-day (HH:MM:SS) get truncated to
+    // the date part here; the per-place time is still kept on the place.
+    const derivedDetail = { ...(detail || {}) };
+    let earliest: string | undefined;
+    let latest: string | undefined;
+    for (const it of items) {
+      if (!it || typeof it !== 'object' || !('detail' in it)) continue;
+      const st = (it as Place).detail?.start_time;
+      if (!st) continue;
+      const date = String(st).slice(0, 10);
+      if (!earliest || date < earliest) earliest = date;
+      if (!latest || date > latest) latest = date;
+    }
+    if (earliest) derivedDetail.start_time = earliest;
+    else delete derivedDetail.start_time;
+    if (latest) derivedDetail.end_time = latest;
+    else delete derivedDetail.end_time;
+
     return {
       id: (file as TFile).basename,
       name: name || (file as TFile).basename,
-      detail,
+      detail: derivedDetail,
       items,
       startPoint: start,
       endPoint: end,
@@ -486,7 +517,16 @@ export class RoadmapRepository {
   // 工具：Place -> TOML 文本
   private placeToToml(place: Place): string {
     const obj: any = { name: place.name || place.id || 'Untitled' };
-    if (place.detail) obj.detail = { ...place.detail };
+    if (place.detail) {
+      const detail: any = { ...place.detail };
+      // per-trip 字段不写入 place 文件 —— start_time / end_time / days 都属于
+      // 「这条 trip 里这一次安排」，写到 place 文件会污染跨 trip 复用的语义，
+      // 也会让 trip 上的 clear 操作看起来失效（旧值从 place 文件复活）。
+      delete detail.start_time;
+      delete detail.end_time;
+      delete detail.days;
+      obj.detail = detail;
+    }
     return this.stringifyToml(obj);
   }
 

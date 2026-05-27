@@ -134,8 +134,14 @@ describe('RoadmapRepository', () => {
   describe('loadRoadmap (TOML header + body items)', () => {
     it('reads name + detail and resolves places via metadataCache', async () => {
       const app = createApp();
-      seedPlace(app, '京都站', { start_time: '2025-11-01 09:00', description: '抵达' });
-      const path = seedRoadmap(app, '京都两日', ['[[京都站]]']);
+      // start_time 不再放进 place 文件 —— per-trip 字段只通过 trip 文件 [[wikilink]]
+      // 后的覆盖行提供。这里改成 description 单字段；时间字段的测试由 inline
+      // override 的下一条 case 覆盖。
+      seedPlace(app, '京都站', { description: '抵达' });
+      const path = seedRoadmap(app, '京都两日', [
+        '[[京都站]]',
+        'start_time = "2025-11-01 09:00"',
+      ]);
       const repo = new RoadmapRepository(app as any, ROOT_PATH);
       const r = await repo.loadRoadmap(path);
       expect(r).not.toBeNull();
@@ -144,6 +150,20 @@ describe('RoadmapRepository', () => {
       const p = r!.items[0] as Place;
       expect(p.name).toBe('京都站');
       expect(p.detail.start_time).toBe('2025-11-01 09:00');
+    });
+
+    it('strips stale start_time/end_time from place file (per-trip fields only)', async () => {
+      const app = createApp();
+      // 旧数据可能在 place 文件残留 start_time —— load 阶段必须丢弃，否则
+      // trip 上的 clear 操作会被 place 文件复活的旧值悄悄抵消。
+      seedPlace(app, 'X', { start_time: '2025-01-01', end_time: '2025-01-02', description: 'd' });
+      const path = seedRoadmap(app, 'R', ['[[X]]']);
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      const r = await repo.loadRoadmap(path);
+      const p = r!.items[0] as Place;
+      expect(p.detail.start_time).toBeUndefined();
+      expect(p.detail.end_time).toBeUndefined();
+      expect(p.detail.description).toBe('d');
     });
 
     it('applies inline start_time override on the line below [[Place]]', async () => {

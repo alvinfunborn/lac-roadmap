@@ -89,9 +89,52 @@
   color: var(--text-4);
 }
 
-// Drag-reorder feedback (preserved from previous implementation).
-.lac-tab.lac-tab--dragging  { opacity: 0.5; cursor: grabbing; }
-.lac-tab.lac-tab--drag-over { box-shadow: inset 3px 0 0 var(--plan); }
+// Drag-to-swap feedback — mirrors the place-card Sortable.js treatment:
+//   1) Source tab becomes a ghost (faded, gold tint) while a cursor-following
+//      clone (.lac-tab-drag-clone, appended to <body>) represents the picked-
+//      up tab with a real drop shadow.
+//   2) The tab the cursor is hovering over gets a gold outline + tint so the
+//      drop target reads as "swap with this day."
+//   3) Drag = swap two days' place dates (tabs are always sorted by time,
+//      so the strip order doesn't change — only the contents under each day).
+.lac-tab.lac-tab--dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+  background: rgba(211, 188, 141, 0.08) !important;
+  transition: opacity 0.12s ease, background-color 0.12s ease;
+}
+.lac-tab.lac-tab--drag-over {
+  background: rgba(211, 188, 141, 0.18) !important;
+  box-shadow: inset 0 0 0 1.5px var(--plan);
+  color: var(--text-1) !important;
+  .lac-day-tab-label { color: var(--text-1) !important; }
+  .lac-day-tab-eyebrow { color: var(--text-2) !important; }
+}
+
+// Cursor-following clone — lives outside .lac-tabs (appended to <body>), so
+// it floats above everything. Mirrors the Sortable.js drag clone treatment
+// used by place cards: drop shadow, gold border-bottom rule, slight scale up.
+.lac-tab-drag-clone {
+  position: fixed !important;
+  pointer-events: none;
+  z-index: 10000;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px;
+  padding: 6px 8px 8px !important;
+  margin: 0 !important;
+  background: var(--surface-2) !important;
+  border: 0 !important;
+  border-bottom: 1.5px solid var(--plan) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(211, 188, 141, 0.35);
+  color: var(--text-1) !important;
+  opacity: 0.95;
+  transform: scale(1.05);
+  transform-origin: center center;
+  transition: none !important;
+  .lac-day-tab-label { color: var(--text-1) !important; }
+}
 
 // "+ day" tab — quiet mono +, no underline, right-anchored. Inherits the
 // `.lac-tab` chrome resets above so Obsidian's button pill doesn't sneak

@@ -146,33 +146,6 @@ describe('useTabs', () => {
     expect(locs[1].travelModeToNext).toBeUndefined();
   });
 
-  it('reorderTab moves a key in allKeysForTabs (session-only override)', () => {
-    const r: Roadmap = {
-      id: 'r', name: 'r',
-      items: [
-        makePlace('a', { start_time: '2025-11-01' }),
-        makePlace('b', { start_time: '2025-11-02' }),
-        makePlace('c', { start_time: '2025-11-03' }),
-      ],
-    };
-    const { result } = renderHook(() => useTabsForRoadmap(r));
-    expect(result.current.tabs.allKeysForTabs).toEqual(['2025-11-01', '2025-11-02', '2025-11-03']);
-    act(() => { result.current.tabs.reorderTab('2025-11-03', '2025-11-01'); });
-    // Moved 2025-11-03 to the position of 2025-11-01 → expect it first.
-    expect(result.current.tabs.allKeysForTabs[0]).toBe('2025-11-03');
-  });
-
-  it('reorderTab is a no-op when from === to', () => {
-    const r: Roadmap = {
-      id: 'r', name: 'r',
-      items: [makePlace('a', { start_time: '2025-11-01' })],
-    };
-    const { result } = renderHook(() => useTabsForRoadmap(r));
-    const before = result.current.tabs.allKeysForTabs.slice();
-    act(() => { result.current.tabs.reorderTab('2025-11-01', '2025-11-01'); });
-    expect(result.current.tabs.allKeysForTabs).toEqual(before);
-  });
-
   it('tempDayKeys merge into allKeysForTabs', () => {
     const r: Roadmap = {
       id: 'r', name: 'r',
