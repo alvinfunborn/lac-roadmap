@@ -16,6 +16,9 @@ export type MapLocationItem = {
   travelModeToNext?: 'walk' | 'bicycle' | 'two_wheeler' | 'drive' | 'transit';
   /** 地点状态：过去/未来/未计划 — 用于按状态着色 marker。 */
   status?: PlaceStatus;
+  /** 显式标号（数字 marker 上显示的序号）。子路线的起点/终点共享同一序号，
+   *  无法用「数组下标 +1」表达，故由上游显式指定；缺省时回退到位置式编号。 */
+  label?: number;
 };
 
 function styleForTravelMode(mode?: string): 'solid' | 'dashed' {
@@ -97,7 +100,7 @@ export default function AggregatedMap({ app, repository, settings, overrideLocat
         providerRef.current = inst;
 
         const targetIsWgs84 = prov === 'google';
-        let locations: { lng: number; lat: number; title: string; travelModeToNext?: string; status?: PlaceStatus }[];
+        let locations: { lng: number; lat: number; title: string; travelModeToNext?: string; status?: PlaceStatus; label?: number }[];
         if (overrideLocations !== undefined) {
           // 覆盖模式：按当前 provider 统一坐标系（Google→WGS84，Gaode→GCJ-02）
           locations = overrideLocations.map(it => {
@@ -110,7 +113,7 @@ export default function AggregatedMap({ app, repository, settings, overrideLocat
             } else if (!targetIsWgs84 && !isGcj) {
               [lng, lat] = CoordinateConverter.wgs84ToGcj02(lng, lat);
             }
-            return { lng, lat, title: it.title, travelModeToNext: it.travelModeToNext, status: it.status };
+            return { lng, lat, title: it.title, travelModeToNext: it.travelModeToNext, status: it.status, label: it.label };
           });
         } else {
           const ids = await repository.loadRoadmapSet();
@@ -194,6 +197,9 @@ export default function AggregatedMap({ app, repository, settings, overrideLocat
               inst.displaySearchMarkers(planned.map(toResult), () => {}, {
                 markerStyle: 'number',
                 statuses: planned.map(l => l.status),
+                // 子路线起/终点共享卡片序号 —— 显式 labels 让两枚 marker 标同一个号，
+                // 后续点的编号也继续与卡片对齐（位置式 i+1 做不到）。
+                labels: planned.map(l => l.label),
               });
             }
             if (wishlist.length > 0) {

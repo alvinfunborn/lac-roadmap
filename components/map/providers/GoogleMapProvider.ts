@@ -96,10 +96,14 @@ export class GoogleMapProvider implements IMapProvider {
   removeMarker(marker: any): void { if (!marker) return; marker.setMap(null); }
   async searchPlaces(keyword: string): Promise<MapSearchResult[]> { return await searchPlacesByGoogleAPI(keyword, this.apiKey, this.mapInstance); }
   async getAddressByCoordinates(lng: number, lat: number): Promise<MapLocation | null> { return await getAddressByCoordinates(lng, lat, this.apiKey); }
-  displaySearchMarkers(results: MapSearchResult[], onClick: (index: number) => void, options?: { markerStyle?: 'circle' | 'number'; statuses?: Array<'done' | 'plan' | 'wish' | undefined> }): any[] {
+  displaySearchMarkers(results: MapSearchResult[], onClick: (index: number) => void, options?: { markerStyle?: 'circle' | 'number'; statuses?: Array<'done' | 'plan' | 'wish' | undefined>; labels?: Array<number | undefined> }): any[] {
     if (!this.mapInstance || !results.length) return [];
     const useCircle = options?.markerStyle === 'circle';
     const statuses = options?.statuses;
+    // 显式编号：子路线占两枚 marker（起点/终点）但共享同一序号，纯位置式 i+1 无法表达，
+    // 故允许调用方传 labels 决定每枚 marker 上的数字；缺省回退到 i+1。
+    const labels = options?.labels;
+    const labelAt = (i: number): string => String(labels?.[i] ?? (i + 1));
     // Legacy-fallback fill palette mirrors --done / --plan / --wish tokens.
     const STATUS_FILL: Record<'done' | 'plan' | 'wish', string> = {
       done: '#B3995D',
@@ -120,7 +124,7 @@ export class GoogleMapProvider implements IMapProvider {
             el.className = `lac-map-marker-circle${status ? ` lac-map-marker-circle--${status}` : ''}`;
           } else {
             el.className = `lac-map-marker-number${status ? ` lac-map-marker-number--${status}` : ''}`;
-            el.textContent = String(i + 1);
+            el.textContent = labelAt(i);
           }
           marker = new google.maps.marker.AdvancedMarkerElement({
             position: { lat, lng },
@@ -147,7 +151,7 @@ export class GoogleMapProvider implements IMapProvider {
               map: this.mapInstance,
               title: result.name,
               icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: fill, fillOpacity: 1, strokeColor: '#0E1316', strokeWeight: 1.5 },
-              label: { text: String(i + 1), color: '#0E1316', fontSize: '10px', fontWeight: 'bold' }
+              label: { text: labelAt(i), color: '#0E1316', fontSize: '10px', fontWeight: 'bold' }
             });
           }
           marker.addListener('click', () => onClick(i));

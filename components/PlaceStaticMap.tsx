@@ -11,6 +11,9 @@ export interface PlacePoint {
   /** Trip-relative status — 'wish' 脱离时间轴：不连线、不编号、用 wish 色单独画圆点。
    *  缺省视为 'plan'（参与编号 + 连线）。 */
   status?: PlaceStatus;
+  /** 显式序号 —— 与列表卡片号对齐。没坐标的地点不进 places，但它占去的号通过这里
+   *  反映在后续点上（如缩略图显示 1,2,4，跳过坐标缺失的 3）。缺省回退到数组位置。 */
+  label?: number;
 }
 
 interface PlaceStaticMapProps {
@@ -174,12 +177,12 @@ export default function PlaceStaticMap({
   // wishlist 单独画圆点（无数字 / wish 配色 / 不参与连线）。
   const PLAN_FILL = '#D3BC8D';
   const WISH_FILL = '#C77A4A';
-  type Annotated = { x: number; y: number; visible: boolean; isWish: boolean; plannedIdx: number };
+  type Annotated = { x: number; y: number; visible: boolean; isWish: boolean; plannedIdx: number; label?: number };
   let plannedCounter = 0;
   const annotated: Annotated[] = positions.map((p, i) => {
     const isWish = places[i]?.status === 'wish';
     const plannedIdx = isWish ? -1 : plannedCounter++;
-    return { ...p, isWish, plannedIdx };
+    return { ...p, isWish, plannedIdx, label: places[i]?.label };
   });
   const polylinePts = annotated
     .filter(a => !a.isWish)
@@ -238,7 +241,7 @@ export default function PlaceStaticMap({
                 fontWeight={600}
                 fontFamily='"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace'
                 fill="#0E1316"
-              >{p.plannedIdx + 1}</text>
+              >{p.label ?? (p.plannedIdx + 1)}</text>
             </g>
           );
         })}

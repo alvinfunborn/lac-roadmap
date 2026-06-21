@@ -59,10 +59,13 @@ export class AmapProvider implements IMapProvider {
   removeMarker(marker: any): void { if (!this.mapInstance || !marker) return; this.mapInstance.remove(marker); if (marker === this.currentMarker) { this.currentMarker = null; } }
   async searchPlaces(keyword: string): Promise<MapSearchResult[]> { return await searchPlacesByWebAPI(keyword, this.webServiceKey); }
   async getAddressByCoordinates(lng: number, lat: number): Promise<MapLocation | null> { return await getAddressByCoordinates(lng, lat, this.webServiceKey); }
-  displaySearchMarkers(results: MapSearchResult[], onClick: (index: number) => void, options?: { markerStyle?: 'circle' | 'number'; statuses?: Array<'done' | 'plan' | 'wish' | undefined> }): any[] {
+  displaySearchMarkers(results: MapSearchResult[], onClick: (index: number) => void, options?: { markerStyle?: 'circle' | 'number'; statuses?: Array<'done' | 'plan' | 'wish' | undefined>; labels?: Array<number | undefined> }): any[] {
     if (!this.mapInstance || !results.length) return [];
     const useCircle = options?.markerStyle === 'circle';
     const statuses = options?.statuses;
+    // 显式编号（见 GoogleMapProvider 说明）：子路线起/终点共享同一序号；缺省回退 i+1。
+    const labels = options?.labels;
+    const labelAt = (i: number): string => String(labels?.[i] ?? (i + 1));
     const AMap = window.AMap;
     const markers: any[] = [];
     for (let i = 0; i < results.length; i++) {
@@ -76,7 +79,7 @@ export class AmapProvider implements IMapProvider {
         const statusCls = status ? ` lac-map-marker-${useCircle ? 'circle' : 'number'}--${status}` : '';
         const content = useCircle
           ? `<div class="lac-map-marker-circle${statusCls}"></div>`
-          : `<div class="lac-map-marker-number${statusCls}">${i + 1}</div>`;
+          : `<div class="lac-map-marker-number${statusCls}">${labelAt(i)}</div>`;
         const marker = new AMap.Marker({
           position: [lng, lat],
           title: title || undefined,

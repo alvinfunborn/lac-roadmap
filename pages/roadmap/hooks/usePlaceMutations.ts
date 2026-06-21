@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { App, Notice, TFile } from 'obsidian';
-import { Roadmap, Place, RouteSegment, Address, RoadmapDetail } from '../../../types/roadmap';
+import { Roadmap, Place, RouteSegment, Address, RoadmapDetail, hasCoords } from '../../../types/roadmap';
 import { MapLocation } from '../../../types/map';
 import { RoadmapSettings } from '../../../types';
 import { RoadmapRepository } from '../../../repositories/RoadmapRepository';
@@ -200,6 +200,67 @@ export function usePlaceMutations({
     }
   };
 
+  // 子路线被编辑后，若它的首/末地点（startPoint/endPoint）变了，就把引用它的父路线里
+  // 「进 / 出这条子路线」的 route 段按新端点重算。父路线的衔接距离不会自己刷新 ——
+  // 不重算的话，在子路线加 / 删头尾地点后，父级距离会一直停在旧值。
+  const syncParentRouteSegments = async (subName: string, newStart?: Address, newEnd?: Address) => {
+    try {
+      const parents = await repository.findRoadmapsReferencingPlace(subName);
+      if (parents.length === 0) return;
+      const service = new RouteCalculationService(settings?.googleMapsApiKey, settings?.gaodeWebServiceKey);
+      const asPlace = (addr: Address): Place => ({ id: subName, name: subName, detail: { address: addr } });
+      const recalc = async (from: Place, to: Place, travelMode: RouteSegment['travelMode'], provider: 'google' | 'gaode'): Promise<RouteSegment | null> => {
+        const result = await service.calculateRoute(from, to, travelMode, provider);
+        if (!result) return null;
+        return { travelMode: result.travelMode, distance: result.distance, duration: result.duration, tolls: typeof result.tolls === 'number' ? result.tolls : 0 };
+      };
+      for (const parentPath of parents) {
+        if (parentPath === filePath) continue;
+        const parent = await repository.loadRoadmap(parentPath);
+        if (!parent) continue;
+        const items = [...parent.items];
+        const provider = (parent.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+        let changed = false;
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          if (!isPlace(it) || (it as Place).name !== subName) continue;
+          // 进站段：上一地点 → 子路线 startPoint（文件里存为上一地点的 outgoing route = items[i-1]）
+          if (hasCoords(newStart)) {
+            const inSeg = items[i - 1];
+            const prevPlace = items[i - 2];
+            if (isRouteSegment(inSeg) && isPlace(prevPlace) && hasCoords((prevPlace as Place).detail?.address)) {
+              const seg = await recalc(prevPlace as Place, asPlace(newStart), (inSeg as RouteSegment).travelMode, provider);
+              if (seg) { items[i - 1] = seg; changed = true; }
+            }
+          }
+          // 出站段：子路线 endPoint → 下一地点（items[i+1] 是 route，items[i+2] 是下一地点）
+          if (hasCoords(newEnd)) {
+            const outSeg = items[i + 1];
+            const nextPlace = items[i + 2];
+            if (isRouteSegment(outSeg) && isPlace(nextPlace) && hasCoords((nextPlace as Place).detail?.address)) {
+              const seg = await recalc(asPlace(newEnd), nextPlace as Place, (outSeg as RouteSegment).travelMode, provider);
+              if (seg) { items[i + 1] = seg; changed = true; }
+            }
+          }
+        }
+        if (changed) await repository.updateRoadmapItems(parentPath, parent.name, parent.detail || {}, items);
+      }
+    } catch (e) { console.warn('[usePlaceMutations] syncParentRouteSegments failed', e); }
+  };
+
+  // 仅当端点真的变了、且当前文件确实是一条子路线时才去同步父路线 —— 把全库扫描和
+  // 路由 API 调用限制在「子路线头尾地点变化」这一种场景，避免每次保存都触发。
+  const syncParentsIfEndpointsChanged = async (
+    subName: string, oldStart: Address | undefined, oldEnd: Address | undefined, r: Roadmap | null,
+  ) => {
+    if (!r) return;
+    const coordEq = (a?: Address, b?: Address) =>
+      (!a && !b) || (!!a && !!b && a.longitude === b.longitude && a.latitude === b.latitude);
+    if (coordEq(oldStart, r.startPoint) && coordEq(oldEnd, r.endPoint)) return;
+    if (!(await repository.isSubRoadmapEntry(filePath))) return;
+    await syncParentRouteSegments(subName, r.startPoint, r.endPoint);
+  };
+
   const onSavePlace = async (payload: PlaceEditPayload) => {
     if (!data) return;
     const folder = (filePath.split('/').slice(0, -1).join('/')) || 'LaC/Roadmap';
@@ -363,6 +424,7 @@ export function usePlaceMutations({
       await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, nextItems);
       const r = await repository.loadRoadmap(filePath);
       setData(r);
+      await syncParentsIfEndpointsChanged(data.name, data.startPoint, data.endPoint, r);
     } catch (err) {
       console.warn('[usePlaceMutations] 更新路线文件失败', err);
       new Notice(t('notice.updateRoadmapFailed'));
@@ -408,6 +470,7 @@ export function usePlaceMutations({
       await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, remaining);
       const r = await repository.loadRoadmap(filePath);
       setData(r);
+      await syncParentsIfEndpointsChanged(data.name, data.startPoint, data.endPoint, r);
     } catch (err) {
       console.warn('[usePlaceMutations] 删除地点失败', err);
       new Notice(t('notice.deleteFailed'));
@@ -431,7 +494,11 @@ export function usePlaceMutations({
       setEditInitial({ start_time: latestDate });
       setEditorVisible(true);
     } else {
-      setEditInitial(undefined);
+      // 没有可见的日期 tab 时，回退到路线自己的「计划日期」（detail.start_time）。
+      // 一条已定日期、地点还没排期的（子）路线，加地点应默认落到计划日那天，而不是
+      // 统统进 wishlist。计划日期不存在时才真正留空。
+      const planned = data?.detail?.start_time ? String(data.detail.start_time).slice(0, 10) : '';
+      setEditInitial(planned ? { start_time: planned } : undefined);
       setEditorVisible(true);
     }
   };
@@ -452,8 +519,20 @@ export function usePlaceMutations({
     if (dup) { new Notice(t('notice.subRoadmapDuplicate')); return; }
 
     try {
-      const subFile = await repository.saveSubRoadmapFile(folder, name, payload.detail);
-      const placeRef: Place = { id: name, name, detail: {} };
+      // 子路线默认继承父路线的 map_provider：用户没在创建弹窗里另选时，把父路线
+      // 当前的 provider 写进新子路线文件，省得它掉回全局默认（常和父路线不一致）。
+      const subDetail = { ...(payload.detail || {}) };
+      if (!subDetail.map_provider && data.detail?.map_provider) {
+        subDetail.map_provider = data.detail.map_provider;
+      }
+      const subFile = await repository.saveSubRoadmapFile(folder, name, subDetail);
+      // 把建路线时选定/预填的日期作为父路线里的「每程覆盖」写到 placeRef 上，
+      // 这样新子路线与「添加地点」一样落进对应日期的分组，而不是掉进 wishlist。
+      const placeRef: Place = {
+        id: name,
+        name,
+        detail: payload.detail?.start_time ? { start_time: payload.detail.start_time } : {},
+      };
       const nextItems: Array<Place | RouteSegment> = [...(data.items || []), placeRef];
       await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, nextItems);
       const r = await repository.loadRoadmap(filePath);

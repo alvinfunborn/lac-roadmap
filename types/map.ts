@@ -7,6 +7,8 @@ export interface MapLocation {
   coordinate_system?: string; // WGS84/GPS, GCJ-02, etc.
   /** Trip-relative status — 'wish' (无日期) 在地图上脱离时间轴：不连线、不编号、用 wish 色单独画圆点。 */
   status?: 'done' | 'plan' | 'wish';
+  /** 显式序号 —— 与列表卡片号对齐。子路线的起点/终点共享同一序号。缺省回退到位置式编号。 */
+  label?: number;
 }
 
 export interface MapSearchResult {

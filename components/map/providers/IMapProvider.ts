@@ -7,7 +7,7 @@ export interface IMapProvider {
   removeMarker(marker: any): void;
   searchPlaces(keyword: string): Promise<MapSearchResult[]>;
   getAddressByCoordinates(lng: number, lat: number): Promise<MapLocation | null>;
-  displaySearchMarkers(results: MapSearchResult[], onClick: (index: number) => void, options?: { markerStyle?: 'circle' | 'number'; statuses?: Array<'done' | 'plan' | 'wish' | undefined> }): any[];
+  displaySearchMarkers(results: MapSearchResult[], onClick: (index: number) => void, options?: { markerStyle?: 'circle' | 'number'; statuses?: Array<'done' | 'plan' | 'wish' | undefined>; labels?: Array<number | undefined> }): any[];
   /** 缩放地图使所有点刚好在视野内 */
   fitBounds(locations: { lng: number; lat: number }[]): void;
   clearMarkers(markers: any[]): void;

@@ -271,23 +271,6 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
     return () => document.removeEventListener('click', onDocClick);
   }, [contextMenu]);
 
-  const handleDeleteRoadmap = async (roadmap: Roadmap) => {
-    setContextMenu(null);
-    const modal = new ConfirmModal(t('page.set.confirm.remove', { name: roadmap.name }), t('common.delete'), t('common.cancel'), true);
-    const ok = await modal.open();
-    if (!ok) return;
-    const ids = await repository.loadRoadmapSet();
-    const newIds = ids.filter(id => id !== roadmap.id);
-    await repository.updateRootFile(newIds);
-    const roadmapPromises = newIds.map(async (id) => {
-      const dest = app.metadataCache.getFirstLinkpathDest(id, repository.getRootPath());
-      if (dest && dest instanceof TFile) return await repository.loadRoadmap(dest.path);
-      return null;
-    });
-    const loaded = (await Promise.all(roadmapPromises)).filter(Boolean) as Roadmap[];
-    setRoadmaps(sortRoadmaps(loaded, newIds));
-  };
-
   const handleDeleteRoadmapPermanently = async (roadmap: Roadmap) => {
     setContextMenu(null);
     const confirm1 = await new ConfirmModal(
@@ -610,7 +593,6 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
           style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999 }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button type="button" className="lac-btn lac-context-item" onClick={() => handleDeleteRoadmap(contextMenu.roadmap)}>{t('page.set.menu.remove')}</button>
           <button type="button" className="lac-btn lac-context-item" onClick={() => handleCopyRoadmap(contextMenu.roadmap)}>{t('page.set.menu.copy')}</button>
           <button type="button" className="lac-btn lac-context-item lac-context-item-danger" onClick={() => handleDeleteRoadmapPermanently(contextMenu.roadmap)}>{t('page.set.menu.deletePermanent')}</button>
         </div>

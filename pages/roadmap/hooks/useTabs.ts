@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Roadmap, Place, RouteSegment } from '../../../types/roadmap';
+import { Roadmap, Place, RouteSegment, Address, hasCoords } from '../../../types/roadmap';
 import { isPlace, isRouteSegment } from '../../../utils/typeGuards';
 import { compareGroupKey, isDateKey, formatYMD } from '../../../utils/date';
 import { PlaceStatus, getPlaceStatus } from '../../../utils/placeStatus';
@@ -17,6 +17,9 @@ interface UseTabsParams {
   groups: Record<string, Array<Place | import('../../../types/roadmap').RouteSegment>>;
   groupKeys: string[];
   tempDayKeys: string[];
+  /** 子路线端点缓存：place id → { start, end }（子路线首/末个 geocoded 地点）。
+   *  地图标点需要它来给子路线条目画出起点+终点两枚 marker。 */
+  subEndpoints?: Record<string, { start?: Address; end?: Address }>;
 }
 
 export interface TabsApi {
@@ -27,18 +30,35 @@ export interface TabsApi {
   tabDefs: TabDef[];
   filteredKeys: string[];
   filteredPlaces: Place[];
-  mapLocations: { lng: number; lat: number; title: string; coordinate_system?: string; travelModeToNext?: RouteSegment['travelMode']; status?: PlaceStatus }[];
+  mapLocations: { lng: number; lat: number; title: string; coordinate_system?: string; travelModeToNext?: RouteSegment['travelMode']; status?: PlaceStatus; label?: number }[];
   visibleItemIndices: number[];
 }
 
 /** 标签/筛选/可见项的集中状态 */
-export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams): TabsApi {
-  const [selectedTabs, setSelectedTabs] = useState<Set<string>>(() => new Set());
+export function useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints }: UseTabsParams): TabsApi {
+  // 已选 tab 按「路线身份」(data?.id) 分别记忆。RoadmapView 复用同一个 React 实例
+  // 做导航（父 → 子 → 返回），useState 会跨导航保留 —— 若所有路线共用一份选择，
+  // 父路线选中的日期 tab 带进子路线会匹配不到任何 key、把子路线地点全挡掉。按 id
+  // 分桶后：每条路线维持自己的筛选，子路线默认空选（全部可见），返回父级时其筛选
+  // 原样恢复，无需每次重新选。
+  const [tabsById, setTabsById] = useState<Record<string, string[]>>({});
+  const id = data?.id || '';
+  const selectedTabs = useMemo(() => new Set(tabsById[id] || []), [tabsById, id]);
 
-  const onToggleTab = (id: string) => {
+  const setSelectedTabs: React.Dispatch<React.SetStateAction<Set<string>>> = (action) => {
+    setTabsById(prev => {
+      const current = new Set(prev[id] || []);
+      const next = typeof action === 'function'
+        ? (action as (p: Set<string>) => Set<string>)(current)
+        : action;
+      return { ...prev, [id]: Array.from(next) };
+    });
+  };
+
+  const onToggleTab = (tabId: string) => {
     setSelectedTabs(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(tabId)) next.delete(tabId); else next.add(tabId);
       return next;
     });
   };
@@ -54,7 +74,14 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams)
   // an empty array — counts render as 0 and clicking the tab filters to
   // nothing, which is the expected behavior.
   const allKeysForTabs = useMemo(() => {
-    const base = [...groupKeys, ...tempDayKeys].sort(compareGroupKey);
+    const base = [...groupKeys, ...tempDayKeys];
+    // 路线有「计划日期」（detail.start_time）但还没有任何带日期的地点时，用计划日期
+    // 种出一个日期 tab —— 这样打开一条已定日期的（子）路线就能看到日期标签，且
+    // 「+ 添加地点」会默认落到这天，而不是统统进 wishlist。一旦有了真正带日期的
+    // 地点，date key 就以地点为准，不再额外种这一天。
+    const planned = data?.detail?.start_time ? String(data.detail.start_time).slice(0, 10) : '';
+    if (planned && !base.some(isDateKey) && !base.includes(planned)) base.push(planned);
+    base.sort(compareGroupKey);
     const dates = base.filter(isDateKey).sort();
     if (dates.length < 2) return base;
     const filled = new Set(base);
@@ -67,7 +94,7 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams)
       filled.add(formatYMD(cursor));
     }
     return Array.from(filled).sort(compareGroupKey);
-  }, [groupKeys, tempDayKeys]);
+  }, [groupKeys, tempDayKeys, data?.detail?.start_time]);
 
   const tabDefs = useMemo<TabDef[]>(() => {
     const defs: TabDef[] = [];
@@ -113,22 +140,39 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams)
   }, [groups, filteredKeys]);
 
   const mapLocations = useMemo(() => {
-    const out: { lng: number; lat: number; title: string; coordinate_system?: string; travelModeToNext?: RouteSegment['travelMode']; status?: PlaceStatus }[] = [];
+    const out: { lng: number; lat: number; title: string; coordinate_system?: string; travelModeToNext?: RouteSegment['travelMode']; status?: PlaceStatus; label?: number }[] = [];
     // 按 filteredKeys 顺序遍历分组，在每个分组内保留 Place 间夹着的 RouteSegment 作为衔接交通方式。
     // 跨分组不假设交通方式（留空 → 默认实线）。
+    //
+    // 编号（label）：与卡片序号对齐 —— 每张「已计划」卡片占一个序号；子路线条目自己没有
+    // 坐标，用它的端点画出「起点 + 终点」两枚 marker，且两枚共用同一序号（= 该卡片号），
+    // 这样地图上的数字与列表卡片一一对应，序号不再错位。wishlist 不参与编号。
+    let plannedCounter = 0;
     for (const k of filteredKeys) {
       const arr = groups[k] || [];
       let pendingMode: RouteSegment['travelMode'] | undefined;
       for (const it of arr) {
         if (isPlace(it)) {
-          const loc = it.detail?.address;
-          if (loc && typeof loc.longitude === 'number' && typeof loc.latitude === 'number') {
-            // 将前一个 Place 的 travelModeToNext 填为当前 pendingMode
-            if (out.length > 0 && pendingMode !== undefined) {
-              out[out.length - 1].travelModeToNext = pendingMode;
-            }
-            out.push({ lng: loc.longitude, lat: loc.latitude, title: it.name || '', coordinate_system: loc.coordinate_system, status: getPlaceStatus(it) });
+          const status = getPlaceStatus(it);
+          const label = status === 'wish' ? undefined : (++plannedCounter);
+          const own = it.detail?.address;
+          if (hasCoords(own)) {
+            if (out.length > 0 && pendingMode !== undefined) out[out.length - 1].travelModeToNext = pendingMode;
+            out.push({ lng: own.longitude, lat: own.latitude, title: it.name || '', coordinate_system: own.coordinate_system, status, label });
             pendingMode = undefined;
+          } else {
+            // 子路线条目：用端点画起点 + 终点两枚 marker（同一 label）。
+            const ep = subEndpoints?.[it.id];
+            const s = hasCoords(ep?.start) ? ep!.start : undefined;
+            const e = hasCoords(ep?.end) ? ep!.end : undefined;
+            if (s) {
+              if (out.length > 0 && pendingMode !== undefined) out[out.length - 1].travelModeToNext = pendingMode;
+              out.push({ lng: s.longitude!, lat: s.latitude!, title: `${it.name || ''} ·起`, coordinate_system: s.coordinate_system, status, label });
+              pendingMode = undefined;
+            }
+            if (e && e !== s) {
+              out.push({ lng: e.longitude!, lat: e.latitude!, title: `${it.name || ''} ·终`, coordinate_system: e.coordinate_system, status, label });
+            }
           }
         } else if (isRouteSegment(it)) {
           pendingMode = it.travelMode;
@@ -136,7 +180,7 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys }: UseTabsParams)
       }
     }
     return out;
-  }, [groups, filteredKeys]);
+  }, [groups, filteredKeys, subEndpoints]);
 
   const visibleItemIndices = useMemo(() => {
     const items = data?.items || [];

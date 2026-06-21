@@ -109,6 +109,14 @@ describe('RoadmapRepository', () => {
       const repo = new RoadmapRepository(app as any, ROOT_PATH);
       expect(await repo.isSubRoadmapEntry(placePath)).toBe(false);
     });
+    it('true via structural fallback when marker is missing but body lists [[place]] items', async () => {
+      // Older / re-saved sub-roadmaps can lose their type/renders marker.
+      // A file that itself references places is still structurally a route.
+      const app = createApp();
+      const subPath = seedRoadmap(app, 'Stripped Sub', ['[[京都站]]', '[[伏见稻荷]]']);
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      expect(await repo.isSubRoadmapEntry(subPath)).toBe(true);
+    });
   });
 
   describe('loadRoadmapSet', () => {
@@ -152,6 +160,26 @@ describe('RoadmapRepository', () => {
       expect(p.detail.start_time).toBe('2025-11-01 09:00');
     });
 
+    it('resolves a place via same-folder path fallback when metadataCache misses (post-create race)', async () => {
+      // Right after savePlaceFile, the metadataCache may not have indexed the
+      // new place file yet, so getFirstLinkpathDest returns null and the place
+      // would be skipped — the symptom is "added a place, saved, but it never
+      // shows". loadRoadmap must fall back to a same-folder path lookup.
+      const app = createApp();
+      const placePath = 'LaC/Roadmap/天界台.md';
+      app.vault.files.set(placePath, {
+        file: new (require('../__mocks__/obsidian').TFile)(placePath),
+        content: 'name = "天界台"\n\n[detail]\ndescription = "d"\n',
+      });
+      const path = seedRoadmap(app, 'Sub', ['[[天界台]]']);
+      // Simulate the cache not yet knowing about the freshly created file.
+      app.metadataCache.getFirstLinkpathDest = () => null;
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      const r = await repo.loadRoadmap(path);
+      expect(r!.items.length).toBe(1);
+      expect((r!.items[0] as Place).name).toBe('天界台');
+    });
+
     it('strips stale start_time/end_time from place file (per-trip fields only)', async () => {
       const app = createApp();
       // 旧数据可能在 place 文件残留 start_time —— load 阶段必须丢弃，否则
@@ -179,6 +207,52 @@ describe('RoadmapRepository', () => {
       const p = r!.items[0] as Place;
       expect(p.detail.start_time).toBe('2025-11-01 10:00');
       expect(p.detail.end_time).toBe('2025-11-01 12:00');
+    });
+
+    it('keeps the header date for a trip with no places (planned but unfilled)', async () => {
+      // A freshly-created sub-roadmap carries its date in the header but has
+      // no places yet — derivation must NOT wipe it, or the trip loses its
+      // date on its own page / editor.
+      const app = createApp();
+      const path = 'LaC/Roadmap/EmptyDated.md';
+      app.vault.files.set(path, {
+        file: new (require('../__mocks__/obsidian').TFile)(path),
+        content: 'name = "EmptyDated"\ntype = "root"\nrenders = ["roadmap"]\n\n[detail]\nstart_time = "2025-08-15"\nend_time = "2025-08-16"\n',
+      });
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      const r = await repo.loadRoadmap(path);
+      expect(r!.detail.start_time).toBe('2025-08-15');
+      expect(r!.detail.end_time).toBe('2025-08-16');
+    });
+
+    it('keeps the planned header date when the trip has places but none are dated', async () => {
+      // A sub-roadmap can carry a planned date while its places are not yet
+      // scheduled. The planned date must survive so new places can inherit it
+      // (otherwise every added place falls into the wishlist). Explicit
+      // clearing is done through the meta editor, not by derivation.
+      const app = createApp();
+      seedPlace(app, 'X');
+      const path = 'LaC/Roadmap/UndatedPlaces.md';
+      app.vault.files.set(path, {
+        file: new (require('../__mocks__/obsidian').TFile)(path),
+        content: 'name = "UndatedPlaces"\n\n[detail]\nstart_time = "2025-08-15"\n\n[[X]]\n',
+      });
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      const r = await repo.loadRoadmap(path);
+      expect(r!.detail.start_time).toBe('2025-08-15');
+    });
+
+    it('derives the date from dated places, overriding the header', async () => {
+      const app = createApp();
+      seedPlace(app, 'Y');
+      const path = 'LaC/Roadmap/DatedPlace.md';
+      app.vault.files.set(path, {
+        file: new (require('../__mocks__/obsidian').TFile)(path),
+        content: 'name = "DatedPlace"\n\n[detail]\nstart_time = "2025-08-15"\n\n[[Y]]\nstart_time = "2025-09-01"\n',
+      });
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      const r = await repo.loadRoadmap(path);
+      expect(r!.detail.start_time).toBe('2025-09-01');
     });
 
     it('parses inline route = { ... } as next item', async () => {
@@ -250,6 +324,35 @@ describe('RoadmapRepository', () => {
       const seg = r!.items[1] as RouteSegment;
       expect(seg.travelMode).toBe('walk');
       expect(seg.distance).toBe(800);
+    });
+
+    it('preserves the sub-roadmap marker (type/renders) when rewriting items', async () => {
+      // Regression: editing a sub-roadmap's contents used to strip its
+      // type="root"/renders marker, turning it back into a plain place.
+      const app = createApp();
+      seedPlace(app, 'A');
+      const subPath = 'LaC/Roadmap/Sub.md';
+      app.vault.files.set(subPath, {
+        file: new (require('../__mocks__/obsidian').TFile)(subPath),
+        content: 'name = "Sub"\ntype = "root"\nrenders = ["roadmap"]\n\n[detail]\n',
+      });
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      await repo.updateRoadmapItems(subPath, 'Sub', {}, [{ id: 'A', name: 'A', detail: {} }]);
+      const content = app.vault.files.get(subPath)!.content;
+      expect(content).toContain('type = "root"');
+      expect(content).toMatch(/renders = \[\s*"roadmap"\s*\]/);
+      // And it still reads back as a sub-roadmap entry.
+      expect(await repo.isSubRoadmapEntry(subPath)).toBe(true);
+    });
+
+    it('does not add a marker to a plain trip that never had one', async () => {
+      const app = createApp();
+      seedPlace(app, 'A');
+      const path = seedRoadmap(app, 'PlainTrip', []);
+      const repo = new RoadmapRepository(app as any, ROOT_PATH);
+      await repo.updateRoadmapItems(path, 'PlainTrip', {}, [{ id: 'A', name: 'A', detail: {} }]);
+      const content = app.vault.files.get(path)!.content;
+      expect(content).not.toContain('type = "root"');
     });
   });
 

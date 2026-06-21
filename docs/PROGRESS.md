@@ -128,6 +128,35 @@
 - 用户 Vault 数据一致性问题（§8.2.3 / §8.2.6）属于数据治理，不在代码范围（Wave 1 已修当时存在的重复 `[[秋叶原]]`）
 - 路径规划失败时的离线 fallback（当前为 Notice 提示，后续可考虑用直线距离作为默认值）
 
+## v1.4.3 — 子路线（roadmap 里的 roadmap）系列修复（2026-06-21）
+
+围绕「父路线里嵌套子路线」这一条链路的一组 bug 修复，全程 215 测试通过。
+
+### provider 继承
+
+子路线自己没写 `map_provider` 时改为**继承父路线**而不是掉回全局默认（全局其实是 google，多数 trip 各自覆盖成 gaode，导致没覆盖的子路线显示成 google）。打开子路线时按引用它的父路线在内存里回填（治存量，`pages/roadmap/index.tsx`）；创建子路线时把父路线 provider 写进新文件（`usePlaceMutations.onCreateSubRoadmap`）。回填查父级较慢，放在首次 `setData` 之后做，避免点开子路线时先闪一下父页顶部地图。
+
+### 子路线里加地点保存后看不见
+
+`loadRoadmap` 解析 `[[link]]` 只靠 `metadataCache.getFirstLinkpathDest`，而它是异步索引——刚 `savePlaceFile` 后立即 load 时缓存还没收录新文件，整条地点被跳过。加同步兜底：查不到就按「与 trip 同目录的同名 .md」用 `getAbstractFileByPath` 找（`create` 完成后即同步可见）。
+
+### 计划日期 + 日期标签 + 加地点预填
+
+- `loadRoadmap` 时间派生改为：**只要没有任何带日期的地点，就保留头部计划日期**（之前「有地点但都没排期 → 清空」会把已定日期、还没排地点的子路线弄丢日期）。
+- `useTabs`：有计划日期但还没带日期地点时，用计划日期**种出一个日期 tab**。
+- `addPlaceFromList`：没有可见日期 tab 时**回退到路线计划日期**预填，新地点不再统统落进 wishlist。
+
+### 已选 tab / 列表滚动位置按路线记忆
+
+`RoadmapView` 复用同一 React 实例做导航，状态会跨导航残留。改为按路线身份分别记忆：`useTabs` 的已选 tab 用 `tabsById` 分桶（子路线默认空选、不被父路线筛选挡住；返回父级筛选原样恢复）；`pages/roadmap/index.tsx` 记列表 `scrollTop`（`data.id === fileBase` 才记/恢复，每条只恢复一次，编辑不打扰当前滚动）。
+
+### 父路线里的子路线：自动计算 / 缩略图 / 距离 / 地图编号
+
+- **自动计算交通缺坐标**：子路线条目没有自己的坐标，给路线编辑器的 from/to 注入子路线端点（`Timeline.withEndpoint`）。
+- **卡片缺小地图**：`tripPlaces` 用子路线端点作代表点。
+- **父级距离不刷新**：子路线头/尾地点变化（端点变）后，自动重算引用它的父路线里进/出段（`usePlaceMutations.syncParentRouteSegments`，仅端点变化且确为子路线时触发）。
+- **地图序号与列表对不上**：地图标点引入显式 `label`（贯通 `IMapProvider` / Google / 高德 provider 与 `MapSelector` 放大查看器）。子路线画**起点 + 终点两枚 marker 共享同一序号**；没坐标的地点**占号但不画**，后续编号自动跳过；顶部内嵌地图、放大查看器、卡片缩略图统一同一套号。
+
 ## v1.4.2 — 日期标签直接编辑 + trip 时间派生（2026-05-28）
 
 ### Day-tab 直接编辑日期：长按 + 拖拽 + clear

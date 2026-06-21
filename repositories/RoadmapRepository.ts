@@ -41,7 +41,18 @@ export class RoadmapRepository {
     }
   }
 
-  /** 检查文件是否是子路线入口（type=root 且 renders 含 roadmap） */
+  /**
+   * 检查某个被父路线以 [[...]] 引用的文件是否是「子路线」（应作为 roadmap 打开，
+   * 而非地点编辑器）。
+   *
+   * 判定（满足其一即可）：
+   *   1) 显式标识：`type = "root"` 且 renders 含 "roadmap" —— 由 saveSubRoadmapFile
+   *      写入、并在后续重写中保留（见 updateRoadmapItems / updateRoadmapMeta）。
+   *   2) 结构判定：文件正文里至少有一行独立的 [[wikilink]] 地点引用 —— 一个普通
+   *      地点文件只有 TOML 头部，绝不会列出 [[...]] 子项；含子项的必然是嵌套
+   *      路线。这样即便旧文件丢了标识（早期重写会抹掉 type/renders），只要它有
+   *      地点就仍能被正确识别为子路线，不必改动文件本身。
+   */
   async isSubRoadmapEntry(filePath: string): Promise<boolean> {
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) return false;
@@ -52,10 +63,34 @@ export class RoadmapRepository {
       const typeVal = String(parsed.type ?? '').toLowerCase();
       const renders = this.normalizeRenders(parsed.renders);
       const hasRoadmap = renders.some(s => s.includes('roadmap'));
-      return typeVal === 'root' && hasRoadmap;
+      if (typeVal === 'root' && hasRoadmap) return true;
+      // 结构兜底：正文存在独立的 [[...]] 行（与 loadRoadmap 解析 item 的口径一致）。
+      const body = content.slice(header.length);
+      if (/^\s*\[\[[^\]]+\]\]/m.test(body)) return true;
+      return false;
     } catch (e) {
       console.warn('[RoadmapRepository] isSubRoadmapEntry failed', e);
       return false;
+    }
+  }
+
+  /**
+   * 读取既有文件头部中的「路线标识」字段（type / renders），用于在重写时原样
+   * 保留。普通地点文件没有这些字段，返回空对象，不会被误加标识。
+   */
+  private async readPreservedMarkers(filePath: string): Promise<{ type?: unknown; renders?: unknown }> {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!file || !(file instanceof TFile)) return {};
+    try {
+      const content = await this.app.vault.read(file);
+      const parsed = this.parseToml(this.extractTomlHeader(content));
+      const out: { type?: unknown; renders?: unknown } = {};
+      if (parsed.type !== undefined) out.type = parsed.type;
+      if (parsed.renders !== undefined) out.renders = parsed.renders;
+      return out;
+    } catch (e) {
+      console.warn('[RoadmapRepository] readPreservedMarkers failed', e);
+      return {};
     }
   }
 
@@ -89,7 +124,18 @@ export class RoadmapRepository {
       const m = line.match(/^\[\[([^\]]+)\]\]/);
       if (m) {
         const linkTarget = m[1].split('|')[0].trim();
-        const dest = this.app.metadataCache.getFirstLinkpathDest(linkTarget, filePath);
+        let dest = this.app.metadataCache.getFirstLinkpathDest(linkTarget, filePath);
+        if (!dest) {
+          // metadataCache 是异步索引的：刚 savePlaceFile 新建地点后立即 loadRoadmap
+          // 时，缓存可能还没收录这个文件，getFirstLinkpathDest 返回 null，导致新加的
+          // 地点被整条跳过、保存后看不见。回退到按「与 trip 同目录的同名 .md」直接查
+          // —— savePlaceFile 总把地点写在该目录，且 getAbstractFileByPath 在 create
+          // 完成后即同步可见，能绕开这个竞态。
+          const folder = filePath.split('/').slice(0, -1).join('/');
+          const guess = folder ? `${folder}/${linkTarget}.md` : `${linkTarget}.md`;
+          const byPath = this.app.vault.getAbstractFileByPath(guess);
+          if (byPath instanceof TFile) dest = byPath;
+        }
         if (dest && dest instanceof TFile) {
           try {
             const pContent = await this.app.vault.read(dest);
@@ -178,10 +224,14 @@ export class RoadmapRepository {
       if (!earliest || date < earliest) earliest = date;
       if (!latest || date > latest) latest = date;
     }
+    // 派生覆盖头部缓存的规则：
+    //   有地点带日期    → 用派生的最早/最晚日期覆盖（单一事实源）。
+    //   没有任何带日期的地点 → 保留头部里手填/继承的「计划日期」。无论是完全没地点，
+    //                    还是地点都还没排日期，都不抹掉计划日期 —— 否则一条「已定
+    //                    日期、地点还没排期」的（子）路线会丢日期，加地点也无从继承。
+    //                    需要清空计划日期时走 meta 编辑器（saveMetaEditor 显式删除）。
     if (earliest) derivedDetail.start_time = earliest;
-    else delete derivedDetail.start_time;
     if (latest) derivedDetail.end_time = latest;
-    else delete derivedDetail.end_time;
 
     return {
       id: (file as TFile).basename,
@@ -272,6 +322,10 @@ export class RoadmapRepository {
    */
   async updateRoadmapMeta(filePath: string, name: string, detail: any): Promise<void> {
     const headerObj: any = { name };
+    // 同 updateRoadmapItems：保留子路线标识，避免改名/改描述时把 type/renders 抹掉。
+    const markers = await this.readPreservedMarkers(filePath);
+    if (markers.type !== undefined) headerObj.type = markers.type;
+    if (markers.renders !== undefined) headerObj.renders = markers.renders;
     if (detail && typeof detail === 'object') headerObj.detail = detail;
     const headerToml = this.stringifyToml(headerObj);
 
@@ -329,6 +383,11 @@ export class RoadmapRepository {
   //     这样无论文件之前怎么乱，保存一次就归到正确顺序，wishlist 永远在尾巴。
   async updateRoadmapItems(filePath: string, name: string, detail: any, items: Array<Place | RouteSegment>): Promise<void> {
     const headerObj: any = { name };
+    // 保留子路线标识（type = "root" / renders）。只从 name+detail 重建会把它们
+    // 悄悄丢掉，使一条子路线在被编辑后退化成普通地点（点击 → 地点编辑器）。
+    const markers = await this.readPreservedMarkers(filePath);
+    if (markers.type !== undefined) headerObj.type = markers.type;
+    if (markers.renders !== undefined) headerObj.renders = markers.renders;
     if (detail && typeof detail === 'object') headerObj.detail = detail;
     const headerToml = this.stringifyToml(headerObj);
     const escape = (s: string) => String(s).replace(/"/g, '\\"');

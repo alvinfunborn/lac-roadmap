@@ -58,6 +58,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
   const [currentProvider, setCurrentProvider] = useState<string>(settings.mapApiProvider || 'none');
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
 
+  const maskRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const providerRef = useRef<IMapProvider | null>(null);
   const searchMarkersRef = useRef<any[]>([]);
@@ -85,11 +86,11 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
     try { inst.clearPolylines(); } catch {}
     if (list.length === 0) return;
     const targetIsWgs84 = target === 'google';
-    type OverlayPoint = { lng: number; lat: number; title: string; status?: 'done' | 'plan' | 'wish' };
+    type OverlayPoint = { lng: number; lat: number; title: string; status?: 'done' | 'plan' | 'wish'; label?: number };
     const points: OverlayPoint[] = [];
     for (const loc of list) {
       const pt = toTargetCoords(loc, targetIsWgs84);
-      if (pt) points.push({ ...pt, title: loc.name || '', status: loc.status });
+      if (pt) points.push({ ...pt, title: loc.name || '', status: loc.status, label: loc.label });
     }
     if (points.length === 0) return;
     const toResult = (p: OverlayPoint): MapSearchResult => ({
@@ -118,6 +119,8 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
           markers.push(...inst.displaySearchMarkers(planned.map(toResult), () => {}, {
             markerStyle: 'number',
             statuses: planned.map(p => p.status),
+            // 与卡片/顶部地图一致：子路线起/终点共享序号，靠显式 labels 实现。
+            labels: planned.map(p => p.label),
           }));
         }
         if (wishlist.length > 0) {
@@ -264,6 +267,38 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
     document.addEventListener('mousedown', handleDown);
     return () => document.removeEventListener('mousedown', handleDown);
   }, [providerMenuOpen]);
+
+  // Mobile soft-keyboard handling. Focusing the search input pops the
+  // on-screen keyboard, which shrinks the *visual* viewport. Our mask is
+  // `position: fixed` (anchored to the layout viewport), so the browser
+  // pans the visual viewport upward to keep the focused field on screen —
+  // visually shoving the whole map off the top. Pin the mask to the
+  // visualViewport box (offset + size) instead so the modal always stays
+  // fully inside the area above the keyboard. The modal itself caps at
+  // `max-height: min(640px, 100%)` so it shrinks to fit the smaller box.
+  useEffect(() => {
+    if (!visible) return;
+    const vv = window.visualViewport;
+    const el = maskRef.current;
+    if (!vv || !el) return;
+    const sync = () => {
+      el.style.top = `${vv.offsetTop}px`;
+      el.style.left = `${vv.offsetLeft}px`;
+      el.style.width = `${vv.width}px`;
+      el.style.height = `${vv.height}px`;
+    };
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      el.style.top = '';
+      el.style.left = '';
+      el.style.width = '';
+      el.style.height = '';
+    };
+  }, [visible]);
 
   const handleMapClick = async (lng: number, lat: number) => {
     const inst = providerRef.current;
@@ -453,7 +488,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
   const currentMeta = PROVIDER_META[currentProvider as ProviderKey] || PROVIDER_META.google;
 
   return (
-    <div className="lac-map-selector-mask" onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}>
+    <div ref={maskRef} className="lac-map-selector-mask" onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}>
       <div className="lac-map-selector" onClick={(e) => e.stopPropagation()}>
         {/* Hero map fills the entire modal; everything else is overlaid. */}
         <div className="lac-map-background">

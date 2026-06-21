@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { App, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import { RoadmapRepository } from '../../repositories/RoadmapRepository';
 import { Roadmap, Place, RouteSegment, Address, RoadmapDetail } from '../../types/roadmap';
@@ -6,6 +6,7 @@ import { RoadmapSettings } from '../../types';
 import PlaceEditModal from '../../components/modals/PlaceEditModal';
 import RouteSegmentEditModal from '../../components/modals/RouteSegmentEditModal';
 import RoadmapEditModal, { RoadmapEditPayload } from '../../components/modals/RoadmapEditModal';
+import ConfirmModal from '../../components/modals/ConfirmModal';
 import MapSelector from '../../components/map/MapSelector';
 import DatePicker from '../../components/DatePicker';
 import { isPlace } from '../../utils/typeGuards';
@@ -54,11 +55,33 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
   // `applyTabDatePick` which group to remap (date / 第N天 / unplanned).
   const [dateEditTabId, setDateEditTabId] = useState<string | null>(null);
   const cardListRef = useRef<HTMLDivElement | null>(null);
+  // 列表滚动条所在的容器（overflow-y: auto），用来跨「父 ↔ 子路线」导航记忆/恢复
+  // 滚动位置。RoadmapView 复用同一个 React 实例，所以 ref/记忆都跨导航存活。
+  const listWrapperRef = useRef<HTMLDivElement | null>(null);
+  // 每条路线各记一份滚动位置（key = filePath）。返回时恢复，免得每次都从头滚。
+  const scrollPositionsRef = useRef<Record<string, number>>({});
+  // 已为哪个 filePath 恢复过 —— 同一条路线的后续 setData（编辑）不再重置滚动，
+  // 只有切换到别的路线时才恢复一次。
+  const restoredScrollForRef = useRef<string | null>(null);
+  // filePath 去掉目录/扩展名 == loadRoadmap 里写的 data.id。用它判断当前 data 是否
+  // 已经是这条 filePath 的内容（导航瞬间 data 还可能是上一条路线的，需排除）。
+  const fileBase = filePath.split('/').pop()?.replace(/\.md$/, '') || filePath;
 
   useEffect(() => {
+    // Cancellation guard. RoadmapView re-renders this same component
+    // instance in place on every `setViewState` (parent → sub → back),
+    // so state persists across navigations and several runs of this
+    // async effect can overlap. Without the guard, a slower run from a
+    // previous filePath (e.g. the sub-roadmap, whose subRouteMap is
+    // empty) can resolve *after* the current one and clobber the freshly
+    // built map — so returning to the parent loses its sub-route entries
+    // and the card falls through to the place editor. Ignore every
+    // result once the effect has been superseded.
+    let cancelled = false;
     (async () => {
       try {
         const r = await repository.loadRoadmap(filePath);
+        if (cancelled) return;
         setData(r);
         if (r) {
           const map: Record<string, string> = {};
@@ -68,32 +91,73 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
               const dest = app.metadataCache.getFirstLinkpathDest(it.id, filePath);
               if (dest && dest instanceof TFile) {
                 const isSub = await repository.isSubRoadmapEntry(dest.path);
+                if (cancelled) return;
                 if (isSub) {
                   map[it.id] = dest.path;
                   try {
                     const sub = await repository.loadRoadmap(dest.path);
+                    if (cancelled) return;
                     if (sub) endpoints[it.id] = { start: sub.startPoint, end: sub.endPoint };
                   } catch (e) { console.warn('[RoadmapPage] sub endpoints load failed', e); }
                 }
               }
             }
           }
+          if (cancelled) return;
           setSubRouteMap(map);
           setSubEndpoints(endpoints);
         }
+        // 子路线 provider 继承：一条「roadmap 里的 roadmap」自己没写 map_provider
+        // 时，应跟随它所属的父路线（用户直觉「子路线属于这趟行程」），而不是掉回
+        // 全局默认 —— 否则父路线高德、子路线却按全局默认显示成 google。
+        // 放在首次 setData 之后做：父级查找会扫全库读文件，较慢；提前阻塞会让旧
+        // 父页（顶部地图）多停留一帧再跳，造成「先刷一下顶部地图」。这里先把子路线
+        // 渲染出来，查到父级 provider 后再以补丁形式回填。
+        if (r && !r.detail?.map_provider && await repository.isSubRoadmapEntry(filePath)) {
+          if (cancelled) return;
+          try {
+            const parents = await repository.findRoadmapsReferencingPlace(r.name);
+            if (cancelled) return;
+            for (const parentPath of parents) {
+              const parent = await repository.loadRoadmap(parentPath);
+              if (cancelled) return;
+              const prov = parent?.detail?.map_provider;
+              if (prov) {
+                setData(prev => (prev && prev.id === r.id && !prev.detail?.map_provider)
+                  ? { ...prev, detail: { ...(prev.detail || {}), map_provider: prov } }
+                  : prev);
+                break;
+              }
+            }
+          } catch (e) { console.warn('[RoadmapPage] 子路线 provider 继承失败', e); }
+        }
       } catch (err) {
+        if (cancelled) return;
         console.warn('[RoadmapPage] 加载路线失败', err);
         new Notice(t('notice.loadFailed'));
       }
     })();
+    return () => { cancelled = true; };
   }, [repository, filePath, app]);
+
+  // 跨路线导航时恢复列表滚动位置。等当前 data 确实是这条 filePath 的内容
+  // （data.id === fileBase）才恢复，且每条路线只恢复一次 —— 同路线内的编辑
+  // （setData）不打扰用户当前的滚动位置。useLayoutEffect 在绘制前设置 scrollTop，
+  // 避免先闪到顶部再跳。
+  useLayoutEffect(() => {
+    const el = listWrapperRef.current;
+    if (!el || !data || data.id !== fileBase) return;
+    if (restoredScrollForRef.current === filePath) return;
+    el.scrollTop = scrollPositionsRef.current[filePath] ?? 0;
+    restoredScrollForRef.current = filePath;
+  }, [filePath, fileBase, data]);
 
   const { groups, groupKeys, lastPlaceIndex, groupKeyForItem } = useRoadmapGroups(data);
 
   const {
     selectedTabs, onToggleTab, tabDefs, filteredKeys,
     mapLocations, visibleItemIndices,
-  } = useTabs({ data, groups, groupKeys, tempDayKeys });
+  } = useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints });
 
   const places = usePlaceMutations({
     app, repository, settings, filePath,
@@ -489,6 +553,81 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
   };
 
   /**
+   * 删除当前这条路线（含「roadmap 里的 roadmap」子路线 —— 它没有像地点那样的
+   * 编辑器删除入口，删除只能从这里走）。语义与 set 页的「彻底删除」一致：
+   *   1) 把所有引用了它的父路线里的 [[name]] 条目摘掉（连同其后的 route 段）；
+   *   2) 若它本身还挂在 roadmapset 根集合里，也一并移除；
+   *   3) 把它的 .md 文件移入回收站（可恢复）；
+   *   4) 返回上一层。
+   * 通过 meta 编辑器（点标题打开）的删除按钮触发，桌面 / 移动端通用。
+   */
+  const deleteCurrentRoadmap = async () => {
+    if (!data) return;
+    const name = data.name;
+    const ok = await new ConfirmModal(
+      t('page.set.confirm.delete1', { name }),
+      t('common.delete'),
+      t('common.cancel'),
+      true,
+    ).open();
+    if (!ok) return;
+    try {
+      // 1) 摘掉所有父路线里的引用。
+      const referencing = await repository.findRoadmapsReferencingPlace(name);
+      // 用户进来时的上一层（一般唯一）。删除后显式跳回这里 —— 不能用 goBack：
+      // 引用刚被摘掉，history/backlink 回退会找不到落点而退到 roadmapset 入口页，
+      // 那一页会在 metadataCache 尚未消化「文件已移入回收站」时整页重解析，
+      // 期间个别 trip 的 getFirstLinkpathDest 落空被丢掉 → 「缺数据、要重启」。
+      const parentToOpen = referencing[0];
+      for (const parentPath of referencing) {
+        const parent = await repository.loadRoadmap(parentPath);
+        if (!parent) continue;
+        const remaining: Array<Place | RouteSegment> = [];
+        for (let i = 0; i < parent.items.length; i++) {
+          const it = parent.items[i];
+          if (isPlace(it) && (it as Place).name === name) {
+            const next = parent.items[i + 1];
+            if (next && !isPlace(next)) i++; // 连同紧随的 route 段一起删
+            continue;
+          }
+          remaining.push(parent.items[i]);
+        }
+        await repository.updateRoadmapItems(parentPath, parent.name, parent.detail || {}, remaining);
+      }
+      // 2) 从根集合移除（顶层 trip 的情况；子路线一般不在集合里，no-op）。
+      try {
+        const ids = await repository.loadRoadmapSet();
+        if (ids.includes(data.id)) await repository.updateRootFile(ids.filter(id => id !== data.id));
+      } catch (e) { console.warn('[RoadmapPage] remove from set failed', e); }
+      // 3) 文件移入回收站。
+      const self = app.vault.getAbstractFileByPath(filePath);
+      if (self instanceof TFile) {
+        try { await app.fileManager.trashFile(self); }
+        catch (e) { console.warn('[RoadmapPage] trashFile failed', e); }
+      }
+      new Notice(t('notice.deletedTrip', { name }));
+      setMetaEditorVisible(false);
+      // 显式跳回父路线；没有父路线（孤立 trip）才退回 goBack 的常规链路。
+      if (parentToOpen) {
+        const target = hostLeaf
+          || app.workspace.getLeavesOfType('lac-roadmap-view')[0]
+          || app.workspace.activeLeaf;
+        if (target) {
+          await target.setViewState({ type: 'lac-roadmap-view', state: { filePath: parentToOpen }, active: true });
+          app.workspace.revealLeaf(target);
+        } else {
+          await goBack();
+        }
+      } else {
+        await goBack();
+      }
+    } catch (err) {
+      console.warn('[RoadmapPage] 删除路线失败', err);
+      new Notice(t('notice.deleteFailed'));
+    }
+  };
+
+  /**
    * Back navigation. Tries (in order):
    *   0. leaf.history.back() — most accurate "where did the user come from"
    *   1. configured entry file if it links to this trip (roadmapset → trip)
@@ -551,7 +690,24 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
   // last resort. Avoids landing on an unrelated tab and breaking the
   // history-back navigation.
   const handlePlaceClick = async (p: Place, itemIndex: number) => {
-    const subPath = subRouteMap[p.id];
+    // `subRouteMap` is pre-built by the mount effect, but that runs
+    // asynchronously (one file read per item) and can still be empty —
+    // or missing this entry — when the card is first clicked. Relying on
+    // it alone makes a sub-route card fall through to the place editor
+    // whenever the cache lags. Do a live lookup as a fallback so a
+    // sub-roadmap always navigates regardless of timing, and memoise it.
+    let subPath = subRouteMap[p.id];
+    if (!subPath) {
+      try {
+        const dest = app.metadataCache.getFirstLinkpathDest(p.id, filePath);
+        if (dest && dest instanceof TFile && await repository.isSubRoadmapEntry(dest.path)) {
+          subPath = dest.path;
+          setSubRouteMap(prev => ({ ...prev, [p.id]: dest.path }));
+        }
+      } catch (e) {
+        console.warn('[RoadmapPage] sub-roadmap live lookup failed', e);
+      }
+    }
     if (subPath) {
       const target = hostLeaf
         || app.workspace.getLeavesOfType('lac-roadmap-view')[0]
@@ -585,6 +741,16 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
     return list.length ? list : undefined;
   })();
 
+  // 新建子路线（+ add trip）的日期预填 —— 与「添加地点」(addPlaceFromList) 同源：
+  // 取当前选中日期 tab 里最晚的一天预填到 modal 的 WHEN。选中 unplanned 或当前
+  // 没有任何日期 tab 时不预填。
+  const subRoadmapPrefillDate = ((): string | undefined => {
+    if (selectedTabs.has('unplanned')) return undefined;
+    const dateKeys = filteredKeys.filter(isDateKey);
+    if (dateKeys.length === 0) return undefined;
+    return dateKeys.reduce((max, curr) => (curr > max ? curr : max));
+  })();
+
   return (
     <div className="lac-roadmap-root">
       <div className="lac-roadmap-header">
@@ -613,7 +779,15 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         />
       </div>
 
-      <div className="lac-roadmap-list-wrapper">
+      <div
+        className="lac-roadmap-list-wrapper"
+        ref={listWrapperRef}
+        onScroll={(e) => {
+          // 仅在 data 已对应当前 filePath 时记录 —— 导航瞬间列表里还是上一条路线的
+          // 内容，此时的滚动事件不能写到新 filePath 名下，否则会污染它已存的位置。
+          if (data?.id === fileBase) scrollPositionsRef.current[filePath] = e.currentTarget.scrollTop;
+        }}
+      >
         {data && (
           <Timeline
             data={data}
@@ -699,6 +873,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         items={data?.items}
         onCancel={() => setMetaEditorVisible(false)}
         onConfirm={saveMetaEditor}
+        onDelete={data ? deleteCurrentRoadmap : undefined}
       />
 
       {/* 创建嵌套子路线 — `+ add trip` 触发。走纯创建模式（不传 initial / items），
@@ -707,6 +882,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         visible={places.subRoadmapEditorVisible}
         mode="create"
         settings={settings}
+        initial={subRoadmapPrefillDate ? { detail: { start_time: subRoadmapPrefillDate } } : undefined}
         onCancel={() => places.setSubRoadmapEditorVisible(false)}
         onConfirm={places.onCreateSubRoadmap}
       />
@@ -753,6 +929,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
           latitude: l.lat,
           coordinate_system: l.coordinate_system,
           status: l.status,
+          label: l.label,
         }))}
         readOnly
       />

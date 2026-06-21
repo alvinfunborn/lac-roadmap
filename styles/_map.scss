@@ -10,9 +10,16 @@
 //   • bottom-left coord chip, bottom-right scale bar
 //   • bottom action row (clear · cancel · pin here)
 // ─────────────────────────────────────────────────────────────────────────
+// `top/left/width/height` (not `inset`) so MapSelector's visualViewport
+// effect can override the box cleanly on mobile — when the soft keyboard
+// shrinks the visual viewport, the mask is pinned to the visible area
+// above the keyboard instead of being panned off the top of the screen.
 .lac-map-selector-mask {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background: $lac-mask;
   display: flex;
   align-items: center;
@@ -25,7 +32,10 @@
   width: 92vw;
   max-width: 880px;
   height: 78vh;
-  max-height: 640px;
+  // Cap to the mask box (100%) so the modal shrinks to fit when the
+  // mobile keyboard collapses the available height, keeping the topbar
+  // and map fully visible rather than overflowing past the top edge.
+  max-height: min(640px, 100%);
   background: var(--ink);
   border-radius: var(--r-12);
   overflow: hidden;

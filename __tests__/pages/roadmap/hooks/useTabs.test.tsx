@@ -11,9 +11,13 @@ function makeRoute(travelMode: RouteSegment['travelMode']): RouteSegment {
 }
 
 /** Composite hook to mirror what the page does: groups → tabs. */
-function useTabsForRoadmap(data: Roadmap | null, tempDayKeys: string[] = []) {
+function useTabsForRoadmap(
+  data: Roadmap | null,
+  tempDayKeys: string[] = [],
+  subEndpoints?: Record<string, { start?: any; end?: any }>,
+) {
   const { groups, groupKeys, lastPlaceIndex } = useRoadmapGroups(data);
-  const tabs = useTabs({ data, groups, groupKeys, tempDayKeys });
+  const tabs = useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints });
   return { groups, groupKeys, lastPlaceIndex, tabs };
 }
 
@@ -144,6 +148,97 @@ describe('useTabs', () => {
     expect(locs.length).toBe(2);
     expect(locs[0].travelModeToNext).toBe('walk');
     expect(locs[1].travelModeToNext).toBeUndefined();
+  });
+
+  it('seeds a date tab from the planned date when no place is dated yet', () => {
+    // A sub-roadmap planned for a date but with only undated (or no) places
+    // should still surface a date tab so adding a place defaults to that day
+    // instead of dropping into the wishlist.
+    const r: Roadmap = {
+      id: 'r', name: 'r',
+      detail: { start_time: '2025-12-24' },
+      items: [makePlace('a')], // undated → wishlist
+    };
+    const { result } = renderHook(() => useTabsForRoadmap(r));
+    expect(result.current.tabs.allKeysForTabs).toContain('2025-12-24');
+    const dayDef = result.current.tabs.tabDefs.find(d => d.key === '2025-12-24');
+    expect(dayDef).toBeDefined();
+  });
+
+  it('does not seed a planned date tab once a real dated place exists', () => {
+    const r: Roadmap = {
+      id: 'r', name: 'r',
+      detail: { start_time: '2025-12-24' },
+      items: [makePlace('a', { start_time: '2025-11-01' })],
+    };
+    const { result } = renderHook(() => useTabsForRoadmap(r));
+    expect(result.current.tabs.allKeysForTabs).not.toContain('2025-12-24');
+    expect(result.current.tabs.allKeysForTabs).toContain('2025-11-01');
+  });
+
+  it('remembers tab selection per roadmap across navigation (same hook instance)', () => {
+    // RoadmapView reuses the React instance across parent→sub navigation. A
+    // stale parent selection must not carry into the sub (it would hide the
+    // sub's places), but the parent's filter must be restored on return so the
+    // user doesn't have to re-filter every time.
+    const parent: Roadmap = {
+      id: 'parent', name: 'parent',
+      items: [makePlace('a', { start_time: '2025-11-01' })],
+    };
+    const sub: Roadmap = {
+      id: 'sub', name: 'sub',
+      items: [makePlace('b')],
+    };
+    const { result, rerender } = renderHook(({ data }) => useTabsForRoadmap(data), {
+      initialProps: { data: parent as Roadmap },
+    });
+    act(() => { result.current.tabs.onToggleTab('day-1'); });
+    expect(result.current.tabs.selectedTabs.has('day-1')).toBe(true);
+    // → sub: starts fresh (no carry-over)
+    rerender({ data: sub });
+    expect(result.current.tabs.selectedTabs.size).toBe(0);
+    // ← back to parent: filter restored
+    rerender({ data: parent });
+    expect(result.current.tabs.selectedTabs.has('day-1')).toBe(true);
+  });
+
+  it('mapLocations: a sub-roadmap contributes start + end markers sharing the card number', () => {
+    // A sub-roadmap entry has no coords of its own; its position comes from
+    // subEndpoints. The map should plot BOTH endpoints with the SAME label as
+    // the card, so map numbers line up with the list (no off-by-one drift).
+    const r: Roadmap = {
+      id: 'r', name: 'r',
+      items: [
+        makePlace('A', { start_time: '2025-11-01', address: { name: 'A', longitude: 1, latitude: 1 } }),
+        makePlace('Sub', { start_time: '2025-11-01' }), // sub-roadmap: no own coords
+        makePlace('B', { start_time: '2025-11-01', address: { name: 'B', longitude: 5, latitude: 5 } }),
+      ],
+    };
+    const subEndpoints = { Sub: { start: { name: 's', longitude: 2, latitude: 2 }, end: { name: 'e', longitude: 3, latitude: 3 } } };
+    const { result } = renderHook(() => useTabsForRoadmap(r, [], subEndpoints));
+    const locs = result.current.tabs.mapLocations;
+    // A(1), Sub-start(2), Sub-end(2), B(3)
+    expect(locs.map(l => l.label)).toEqual([1, 2, 2, 3]);
+    expect(locs.map(l => [l.lng, l.lat])).toEqual([[1, 1], [2, 2], [3, 3], [5, 5]]);
+  });
+
+  it('mapLocations: a coordless place still occupies its number (map skips it, numbering stays aligned)', () => {
+    // Card numbers count every place; the map only draws geocoded ones. A
+    // coordless place must still consume its number so later markers line up
+    // with the list (e.g. markers show 1,2,4 — never 1,2,3 — when #3 has no
+    // coords).
+    const r: Roadmap = {
+      id: 'r', name: 'r',
+      items: [
+        makePlace('A', { start_time: '2025-11-01', address: { name: 'A', longitude: 1, latitude: 1 } }),
+        makePlace('B', { start_time: '2025-11-01' }), // dated, NO coords
+        makePlace('C', { start_time: '2025-11-01', address: { name: 'C', longitude: 3, latitude: 3 } }),
+      ],
+    };
+    const { result } = renderHook(() => useTabsForRoadmap(r));
+    const locs = result.current.tabs.mapLocations;
+    expect(locs.map(l => l.label)).toEqual([1, 3]); // B(2) reserved but not drawn
+    expect(locs.map(l => l.title)).toEqual(['A', 'C']);
   });
 
   it('tempDayKeys merge into allKeysForTabs', () => {

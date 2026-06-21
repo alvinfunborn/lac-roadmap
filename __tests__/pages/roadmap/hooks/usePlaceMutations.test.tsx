@@ -107,6 +107,16 @@ describe('usePlaceMutations.addPlaceFromList', () => {
     act(() => { result.current.addPlaceFromList(); });
     expect(result.current.editInitial?.start_time).toBe('2025-11-03');
   });
+
+  it('falls back to the trip planned date when no date key is visible', () => {
+    // A planned (sub-)roadmap with no dated places should default new places
+    // to its own planned date rather than the wishlist.
+    const data: Roadmap = { id: 'R', name: 'R', detail: { start_time: '2025-12-24' }, items: [] };
+    const params = makeHookParams({ data, filteredKeys: ['第3天'] });
+    const { result } = renderHook(() => usePlaceMutations(params));
+    act(() => { result.current.addPlaceFromList(); });
+    expect(result.current.editInitial?.start_time).toBe('2025-12-24');
+  });
 });
 
 describe('usePlaceMutations.editPlace', () => {
@@ -317,6 +327,36 @@ describe('usePlaceMutations.onCreateSubRoadmap', () => {
     expect(Notice.recent.some(m => m.includes('Sub'))).toBe(true);
   });
 
+  it('inherits the parent map_provider when the payload has none', async () => {
+    const data: Roadmap = { id: 'R', name: 'R', detail: { map_provider: 'gaode' }, items: [] };
+    const repo = makeRepoMock({ ...data, items: [{ id: 'Sub', name: 'Sub', detail: {} } as Place] });
+    const params = makeHookParams({ data, repository: repo as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    await act(async () => {
+      await result.current.onCreateSubRoadmap({ name: 'Sub', detail: { description: 'd' } });
+    });
+
+    expect(repo.saveSubRoadmapFile).toHaveBeenCalledWith(
+      'LaC/Roadmap', 'Sub', expect.objectContaining({ description: 'd', map_provider: 'gaode' }),
+    );
+  });
+
+  it('keeps an explicitly chosen map_provider over the parent default', async () => {
+    const data: Roadmap = { id: 'R', name: 'R', detail: { map_provider: 'gaode' }, items: [] };
+    const repo = makeRepoMock({ ...data, items: [{ id: 'Sub', name: 'Sub', detail: {} } as Place] });
+    const params = makeHookParams({ data, repository: repo as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    await act(async () => {
+      await result.current.onCreateSubRoadmap({ name: 'Sub', detail: { map_provider: 'google' } });
+    });
+
+    expect(repo.saveSubRoadmapFile).toHaveBeenCalledWith(
+      'LaC/Roadmap', 'Sub', expect.objectContaining({ map_provider: 'google' }),
+    );
+  });
+
   it('rejects an empty name with a Notice and does not write', async () => {
     const data: Roadmap = { id: 'R', name: 'R', detail: {}, items: [] };
     const repo = makeRepoMock();
@@ -342,5 +382,87 @@ describe('usePlaceMutations.onCreateSubRoadmap', () => {
     });
     expect(repo.saveSubRoadmapFile).not.toHaveBeenCalled();
     expect(Notice.recent.some(m => m.includes('已有同名'))).toBe(true);
+  });
+});
+
+describe('usePlaceMutations — parent route sync on sub-roadmap endpoint change', () => {
+  const addr = (name: string, lng: number, lat: number) => ({ name, longitude: lng, latitude: lat });
+
+  it('recomputes the referencing parent\'s in/out segments when the sub endpoint changes', async () => {
+    routeMock.__setRouteResult({ distance: 999, duration: 9, tolls: 0, travelMode: 'drive' });
+    // Sub before: one place; after save: a second place is appended → endPoint moves.
+    const subOld: Roadmap = {
+      id: 'Sub', name: 'Sub', detail: {},
+      items: [{ id: 'p1', name: 'p1', detail: { address: addr('p1', 1, 1) } }],
+      startPoint: addr('p1', 1, 1), endPoint: addr('p1', 1, 1),
+    };
+    const subNew: Roadmap = {
+      ...subOld,
+      items: [...subOld.items, { id: 'p2', name: 'p2', detail: { address: addr('p2', 2, 2) } }],
+      endPoint: addr('p2', 2, 2),
+    };
+    const parent: Roadmap = {
+      id: 'Parent', name: 'Parent', detail: {},
+      items: [
+        { id: 'A', name: 'A', detail: { address: addr('A', 0, 0) } },
+        { travelMode: 'drive', distance: 1, duration: 1, tolls: 0 } as RouteSegment,
+        { id: 'Sub', name: 'Sub', detail: {} },
+        { travelMode: 'drive', distance: 1, duration: 1, tolls: 0 } as RouteSegment,
+        { id: 'B', name: 'B', detail: { address: addr('B', 3, 3) } },
+      ],
+    };
+    const updateRoadmapItems = jest.fn(async () => {});
+    const repo = {
+      findRoadmapsReferencingPlace: jest.fn(async () => ['LaC/Roadmap/Parent.md']),
+      savePlaceFile: jest.fn(async () => new TFile('LaC/Roadmap/p2.md')),
+      updateRoadmapItems,
+      updatePlaceScheduleInRoadmap: jest.fn(async () => {}),
+      isSubRoadmapEntry: jest.fn(async () => true),
+      loadRoadmap: jest.fn(async (p: string) => (p === 'LaC/Roadmap/Parent.md' ? parent : subNew)),
+      saveSubRoadmapFile: jest.fn(),
+      updatePlaceGeneric: jest.fn(async () => {}),
+    };
+    const params = makeHookParams({ data: subOld, repository: repo as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    await act(async () => {
+      await result.current.onSavePlace({ name: 'p2', address: addr('p2', 2, 2) as any });
+    });
+
+    const parentCall = updateRoadmapItems.mock.calls.find(c => c[0] === 'LaC/Roadmap/Parent.md');
+    expect(parentCall).toBeDefined();
+    const items = parentCall![3] as Array<RouteSegment>;
+    // incoming (idx 1) and outgoing (idx 3) segments recomputed to the stubbed value
+    expect(items[1].distance).toBe(999);
+    expect(items[3].distance).toBe(999);
+  });
+
+  it('does not touch parents when the endpoints are unchanged', async () => {
+    routeMock.__setRouteResult({ distance: 999, duration: 9, tolls: 0, travelMode: 'drive' });
+    const sub: Roadmap = {
+      id: 'Sub', name: 'Sub', detail: {},
+      items: [{ id: 'p1', name: 'p1', detail: { address: addr('p1', 1, 1) } }],
+      startPoint: addr('p1', 1, 1), endPoint: addr('p1', 1, 1),
+    };
+    const findRoadmapsReferencingPlace = jest.fn(async () => ['LaC/Roadmap/Parent.md']);
+    const repo = {
+      findRoadmapsReferencingPlace,
+      savePlaceFile: jest.fn(async () => new TFile('LaC/Roadmap/p1.md')),
+      updateRoadmapItems: jest.fn(async () => {}),
+      updatePlaceScheduleInRoadmap: jest.fn(async () => {}),
+      isSubRoadmapEntry: jest.fn(async () => true),
+      // reload returns the same endpoints → no change → no parent scan
+      loadRoadmap: jest.fn(async () => sub),
+      saveSubRoadmapFile: jest.fn(),
+      updatePlaceGeneric: jest.fn(async () => {}),
+    };
+    const params = makeHookParams({ data: sub, repository: repo as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    await act(async () => {
+      await result.current.onSavePlace({ name: 'p1', address: addr('p1', 1, 1) as any });
+    });
+
+    expect(findRoadmapsReferencingPlace).not.toHaveBeenCalled();
   });
 });
