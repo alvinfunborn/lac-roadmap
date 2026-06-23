@@ -1,6 +1,6 @@
 {
   "name": "lac-roadmap",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "Life as Code - Roadmap 旅行路线规划与记录插件",
   "main": "main.js",
   "scripts": {
