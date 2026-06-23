@@ -258,6 +258,48 @@ Timeline 的 DAY-N eyebrow 同步改为按"最早 date key 起的 calendar-day �
 - **roadmapset 卡片点击开新 tab + goBack 历史堆积**：✅ 修复（v1.3.1）。根因是 `main.ts:RoadmapView.setState` 在 in-place 切换 view 时**漏传 `leaf: this.leaf`**——首次 onOpen 传了 leaf，但后续 setState 重新渲染没传，导致 RoadmapSetPage / RoadmapPage 的 `leaf` prop 变 undefined，下次 navigation 落到 `getLeaf(false)` fallback，目标 leaf 不可控（可能落在别的 markdown tab 上），视觉上像"新页面"。修复：(1) `setState` 两处 `React.createElement` 都补 `leaf: this.leaf`；(2) `RoadmapSetPage.openRoadmap` / `handleCopyRoadmap` 抽出 `resolveTargetLeaf()` helper，fallback 链改为 `prop → existing lac-roadmap-view leaf → getLeaf(false)`；(3) `RoadmapPage.handlePlaceClick`（点 sub-roadmap 卡片）应用同样的 fallback 链。
 - **顶部 hero map 无法交互**：✅ 兜底实现（v1.3.2）。v1.3.1 的 `pointer-events: auto !important` 防御无效，确认根因是 `.lac-aggmap` 的 `isolation: isolate` + 子级 `filter: saturate brightness hue-rotate` + ::before 的 `mix-blend-mode: overlay` 组合触发 Chromium hit-testing bug——伪元素的 `pointer-events: none` 失效，事件被装饰层吞掉。该 bug 仅影响 hero 上下文（modal 里的 MapSelector 无此组合所以正常）。修复方案：hero 改为 **click-to-expand readOnly viewer**（mirror RoadmapEditModal 的 where-thumb 做法）：`.lac-map-widget` 加 `--clickable` 修饰符（cursor pointer + hover 阴影 + ↗ expand 角落 chip），点击打开 `MapSelector readOnly`，可在 modal 中 pan/zoom 完整地图。两个页面都接通：roadmap 传 `mapLocations`（当前 trip 的可见地点）作为 `routeLocations`；roadmapset 聚合所有 roadmaps 的 geocoded places。
 
+## 2026-06-23 — 交通方式 UI + 坐标变化交通刷新修复
+
+针对用户反馈的四个问题：
+
+1. **交通方式选择改为风格统一的分段控件** —— `RouteSegmentEditModal` 把原生 `<select>`
+   换成 `.lac-mode-seg` 分段控件（线条 glyph + mono 短标签，激活态金色 `--plan` 填充 +
+   ink 字，与编号地图圆章一致）。样式在 `styles/_modal.scss`。
+2. **改交通方式自动重算距离/时间** —— 新增 `changeMode()`：切换 mode 即用最新 mode
+   静默调用路径规划（有起终点时），避免留旧距离误导。`autoCalculate` 复用 `runCalculate`。
+3. **坐标变化触发上下交通刷新（再次检查）**：
+   - 删除中间地点：`usePlaceMutations.deletePlace` 现在丢弃被删点的「出向」段、保留并按
+     `prev → next` 重算「入向」段（末尾点则丢「入向」段避免悬挂）。
+   - 重排序：重写 `usePlaceDragDrop.recalculateAffectedRoutes` 为「对象身份」邻接对比 ——
+     只重算端点真的变了的段，且用 `prev → next` 正确端点。修掉旧实现把段当 outgoing 却用
+     `prev → 自身` 端点算、且靠错位下标圈定段的双重 bug。
+   - 悬挂段规整：把「地点 + 出向段」整块拖到末尾时出向段失去终点 ——
+     `stripDanglingSegments()` 在 `onDrop` / `onDropToTab` splice 后去掉首/尾悬挂段。
+   - 编辑/新增坐标：原有 `applyRoutesAroundPlace`（recompute / insert-if-missing）保持。
+4. **地点卡片小地图大量破图** —— 改为全局请求调度器（`PlaceStaticMap.tsx` 的
+   `BasemapImg` + 模块级信号量）。根因不是 Google 的 500 QPS（≈30000/min，几十张卡到不
+   了），而是**突发**：每张卡各发一个静态图请求，Chromium/Electron 单 host 并发连接 ≈6，
+   几十个请求一拥而上排队/超时/被重置 → 部分永久破图；编辑器只开一张所以正常。
+   - 全局信号量把同时在飞的请求压到 `MAX_CONCURRENT=4`，其余排队；`new Image()` 预加载
+     成功后再渲染（命中浏览器缓存秒出），失败退避重试（`MAX_RETRY=2`），彻底失败回退占位。
+   - `okSrc` / `failedUrls` 模块级缓存：滚动来回不重复请求。
+   - 加载中显示 `.lac-card-map-loading` 金色 shimmer 骨架，不再是空白/破图标。
+   - 参考限流：Google Maps Static = 30000/min（500 QPS）；高德个人版静态图 QPS 低很多
+     （控制台-流量分析-配额管理 可查，错误码 `CUQPS_HAS_EXCEEDED_THE_LIMIT` /
+     `USER_DAILY_QUERY_OVER_LIMIT`）。
+   - **最终方案（推翻手写调度器）**：手写全局信号量 + 看门狗的尝试反而引入死槽 → 首屏全
+     白，证明过度复杂。改回最简稳健：原生 `loading="lazy"`（浏览器只在缩略图滚近视口时
+     才发请求，天然分批、不一次性突发、自己优雅排队不失败）+ `onError` 指数退避重试
+     （`MAX_RETRY=3`，cache-bust）+ 用尽回退 `map` 占位块。`failedUrls` 缓存避免重复打挂的 URL。
+
+6. **roadmapset 卡片小地图看不到标点**（`StaticMap.tsx`，预存 bug）—— 原来固定 `ZOOM=10`，
+   像 `天山北` 这种横跨新疆 ~800km 的行程，标点全落到 400px 画框外被可见性过滤掉，只剩
+   底图没有标点。移植 `PlaceStaticMap` 的 autoFit：`fitZoom()` 按所有标点的包围盒算出能
+   塞进 ~78% 画面的缩放，中心用 bbox 中点（不是平均），所有 marker 都进框。
+
+测试：新增 `usePlaceDragDrop.test.tsx`（3：端点重算 / 跳过 / 悬挂段剥离）+ `usePlaceMutations`
+删除桥接重算（2），全量 220 passed；`npm run build` 通过。
+
 ## 后续建议
 
 - AggregatedMap legend 已实现颜色区分；未来可考虑：地图地点 marker 着色按"已完成 / 进行中 / 未开始"三态色

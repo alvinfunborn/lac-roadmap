@@ -13,6 +13,17 @@ type SortableFactory = { create: (el: HTMLElement, opts?: object) => SortableIns
 const SortableLib = require('sortablejs') as SortableFactory & { default?: SortableFactory };
 const Sortable: SortableFactory = SortableLib.default ?? SortableLib;
 
+/**
+ * 重排后规整：交通段必须夹在两个地点之间，去掉首/尾的悬挂段（就地修改 arr）。
+ * 最常见来源是把「地点 + 它的出向交通段」整块拖到列表末尾 —— 出向段失去了终点
+ * 地点变成悬挂段，会在时间轴尾部画出一条指向空气的交通 chip。地点本身落到末尾后
+ * 不再有「下一程」，丢掉它原来的出向段即可（用户重新需要时点「+ 添加交通」）。
+ */
+function stripDanglingSegments(arr: Array<Place | RouteSegment>): void {
+  while (arr.length && isRouteSegment(arr[arr.length - 1])) arr.pop();
+  while (arr.length && isRouteSegment(arr[0])) arr.shift();
+}
+
 interface UsePlaceDragDropParams {
   data: Roadmap | null;
   filePath: string;
@@ -65,10 +76,23 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
   const droppedOnTabRef = useRef(false);
   const sortableRef = useRef<SortableInstance | null>(null);
 
-  /** 重新计算受影响的路线段距离 */
+  /**
+   * 重排序后重算「端点真的变了」的交通段。
+   *
+   * 重排只是把 data.items 里既有的 Place / RouteSegment 对象换了顺序（splice 浅拷贝
+   * 保留对象引用），所以可以用「对象身份」精确比较每条段在 before / after 两个数组里
+   * 的左右相邻地点：相邻对没变 → 距离不变，跳过；变了 → 用它在 after 里真正的
+   * `prev → next` 端点重算（保留 travelMode）。
+   *
+   * 这同时修掉了旧实现的两个问题：
+   *   1) 旧实现把段当作某地点的「outgoing」却用 `prev → 该地点` 的端点去算，方向/端点
+   *      都错（段 items[i] 实际代表 prev → next）。
+   *   2) 旧实现靠 splice 之后的下标集合来圈定「受影响段」，下标在增删后会错位，
+   *      导致部分应刷新的段没刷新、不该动的反被覆盖。
+   */
   const recalculateAffectedRoutes = useCallback(async (
-    items: Array<Place | RouteSegment>,
-    changedIndices: number[]
+    beforeItems: Array<Place | RouteSegment>,
+    afterItems: Array<Place | RouteSegment>,
   ) => {
     const routeService = new RouteCalculationService(
       settings?.googleMapsApiKey,
@@ -76,35 +100,31 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     );
     const provider = (data?.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
 
-    for (const idx of changedIndices) {
-      const place = items[idx];
-      if (!isPlace(place)) continue;
+    const neighborsOf = (arr: Array<Place | RouteSegment>, seg: RouteSegment): { prev?: Place; next?: Place } => {
+      const i = arr.indexOf(seg);
+      if (i < 0) return {};
+      let prev: Place | undefined;
+      for (let j = i - 1; j >= 0; j--) { const it = arr[j]; if (isPlace(it)) { prev = it; break; } }
+      let next: Place | undefined;
+      for (let j = i + 1; j < arr.length; j++) { const it = arr[j]; if (isPlace(it)) { next = it; break; } }
+      return { prev, next };
+    };
 
-      const nextItem = items[idx + 1];
-      if (!isRouteSegment(nextItem)) continue;
-
-      const routeSegment = nextItem;
-
-      let prevPlace: Place | undefined;
-      for (let j = idx - 1; j >= 0; j--) {
-        const it = items[j];
-        if (isPlace(it)) { prevPlace = it; break; }
-      }
-      if (!prevPlace) continue;
-
+    for (const seg of afterItems) {
+      if (!isRouteSegment(seg)) continue;
+      const before = neighborsOf(beforeItems, seg);
+      const after = neighborsOf(afterItems, seg);
+      // 相邻地点对象引用都没变 → 端点没动，距离/时长不变，跳过。
+      if (before.prev === after.prev && before.next === after.next) continue;
+      if (!after.prev || !after.next) continue;
       try {
-        const result = await routeService.calculateRoute(
-          prevPlace,
-          place,
-          routeSegment.travelMode,
-          provider
-        );
+        const result = await routeService.calculateRoute(after.prev, after.next, seg.travelMode, provider);
         if (result) {
-          routeSegment.distance = result.distance;
-          routeSegment.duration = result.duration;
-          routeSegment.tolls = result.tolls;
+          seg.distance = result.distance;
+          seg.duration = result.duration;
+          seg.tolls = result.tolls;
         } else {
-          console.warn(`[RouteCalculation] 计算失败: ${prevPlace.name} -> ${place.name}`);
+          console.warn(`[RouteCalculation] 计算失败: ${after.prev.name} -> ${after.next.name}`);
         }
       } catch (err) {
         console.warn('[RouteCalculation] 异常', err);
@@ -140,15 +160,9 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
       insertAt = toItemIndex;
     }
     items.splice(insertAt, 0, ...block);
-
-    const affectedIndices: number[] = [];
-    if (takeCount === 2) affectedIndices.push(insertAt);
-    for (let i = from; i < items.length; i++) {
-      if (isPlace(items[i])) { affectedIndices.push(i); break; }
-    }
-    for (let i = insertAt + takeCount; i < items.length; i++) {
-      if (isPlace(items[i])) { affectedIndices.push(i); break; }
-    }
+    // 整块（含出向段）落到末尾时，出向段会变成悬挂段 —— 规整掉。droppedPlace 在段
+    // 之前，去掉尾部段不改变它的下标，后面的日期同步逻辑不受影响。
+    stripDanglingSegments(items);
 
     // 自动同步日期：仅在"前后两位已排日期的邻居一致地指向同一个新日期"时触发，
     // 把 dropped 的日期换成那个邻居日期（time-of-day 保留）。
@@ -188,7 +202,7 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
       }
     }
 
-    await recalculateAffectedRoutes(items, affectedIndices);
+    await recalculateAffectedRoutes(data.items, items);
     await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, items);
     const r = await repository.loadRoadmap(filePath);
     onDataChanged(r);
@@ -275,18 +289,11 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     }
     const finalInsertAt = Math.min(insertAt, items.length);
     items.splice(finalInsertAt, 0, ...block);
-
-    const affectedIndices: number[] = [];
-    if (takeCount === 2) affectedIndices.push(finalInsertAt);
-    for (let i = from; i < items.length; i++) {
-      if (isPlace(items[i])) { affectedIndices.push(i); break; }
-    }
-    for (let i = finalInsertAt + takeCount; i < items.length; i++) {
-      if (isPlace(items[i])) { affectedIndices.push(i); break; }
-    }
+    // 拖到最后一个日期分组时整块可能落在末尾，出向段失去终点 —— 同样规整掉。
+    stripDanglingSegments(items);
 
     await repository.savePlaceFile(folder, droppedPlace);
-    await recalculateAffectedRoutes(items, affectedIndices);
+    await recalculateAffectedRoutes(data.items, items);
     await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, items);
     if (tempDayKeys.includes(targetKey)) setTempDayKeys(prev => prev.filter(k => k !== targetKey));
     const r = await repository.loadRoadmap(filePath);

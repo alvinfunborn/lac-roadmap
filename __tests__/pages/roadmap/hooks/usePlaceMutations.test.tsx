@@ -154,6 +154,49 @@ describe('usePlaceMutations.deletePlace', () => {
     expect(params.setData).toHaveBeenCalledWith(reloaded);
   });
 
+  it('recomputes the bridging segment when a middle place is deleted', async () => {
+    // A —segAB→ B —segBC→ C. Deleting B must drop segBC (B's outgoing) and
+    // recompute segAB so it now represents A→C, not the stale A→B distance.
+    const a: Place = { id: 'A', name: 'A', detail: { address: { latitude: 1, longitude: 1 } } };
+    const segAB: RouteSegment = { travelMode: 'drive', distance: 100, duration: 5, tolls: 0 };
+    const b: Place = { id: 'B', name: 'B', detail: { address: { latitude: 2, longitude: 2 } } };
+    const segBC: RouteSegment = { travelMode: 'walk', distance: 200, duration: 9, tolls: 0 };
+    const c: Place = { id: 'C', name: 'C', detail: { address: { latitude: 3, longitude: 3 } } };
+    const data: Roadmap = { id: 'R', name: 'R', detail: {}, items: [a, segAB, b, segBC, c] };
+    const repo = makeRepoMock(data);
+    const params = makeHookParams({ data, repository: repo as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    // Stub the A→C recompute result (travelMode preserved from segAB = drive).
+    routeMock.__setRouteResult({ distance: 555, duration: 33, tolls: 0 });
+
+    await act(async () => { await result.current.deletePlace(b, 2); });
+
+    const items = repo.updateRoadmapItems.mock.calls[0][3] as Array<Place | RouteSegment>;
+    expect(items.map((it: any) => it.name ?? `seg:${it.travelMode}`))
+      .toEqual(['A', 'seg:drive', 'C']);
+    const bridge = items[1] as RouteSegment;
+    expect(bridge.travelMode).toBe('drive');
+    expect(bridge.distance).toBe(555);
+    expect(bridge.duration).toBe(33);
+  });
+
+  it('drops the leading segment (no dangling) when the last place is deleted', async () => {
+    // A —segAB→ B. Deleting B (last) must drop segAB too, leaving just [A].
+    const a: Place = { id: 'A', name: 'A', detail: { address: { latitude: 1, longitude: 1 } } };
+    const segAB: RouteSegment = { travelMode: 'drive', distance: 100, duration: 5, tolls: 0 };
+    const b: Place = { id: 'B', name: 'B', detail: { address: { latitude: 2, longitude: 2 } } };
+    const data: Roadmap = { id: 'R', name: 'R', detail: {}, items: [a, segAB, b] };
+    const repo = makeRepoMock(data);
+    const params = makeHookParams({ data, repository: repo as any });
+    const { result } = renderHook(() => usePlaceMutations(params));
+
+    await act(async () => { await result.current.deletePlace(b, 2); });
+
+    const items = repo.updateRoadmapItems.mock.calls[0][3] as Array<Place | RouteSegment>;
+    expect(items.map((it: any) => it.name ?? `seg:${it.travelMode}`)).toEqual(['A']);
+  });
+
   it('is a no-op when the user cancels the confirm modal', async () => {
     confirmMock.__setConfirm(false);
     const p: Place = { id: 'X', name: 'X', detail: {} };

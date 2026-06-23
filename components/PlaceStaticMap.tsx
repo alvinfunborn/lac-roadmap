@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { RoadmapSettings } from '../types';
 import { CoordinateConverter } from './map/GoogleMap';
 import type { PlaceStatus } from '../utils/placeStatus';
@@ -32,6 +32,65 @@ interface PlaceStaticMapProps {
    *  so the whole trip fits in the thumb. Overrides `currentIndex` focus.
    *  Used by the roadmap editor's overview thumbnail. */
   autoFit?: boolean;
+}
+
+// ─── 卡片底图 <img> 健壮封装 ─────────────────────────────────────────────
+// 列表里几十张卡片若同时各发一个静态图请求，会撞上 Chromium/Electron「单 host 并发
+// 连接 ≈6」的上限互相排队/超时，部分变破图。原生 `loading="lazy"` 让浏览器只在缩略图
+// 滚近视口时才发请求 —— 天然分批、永不一次性突发，且自己优雅排队不会失败；这比手写
+// 全局调度器简单得多也更可靠（之前手写信号量 + 看门狗反而引入死槽，首屏全白）。
+// onError 再叠加退避重试兜底偶发失败，重试用尽才回退统一 `map` 占位块。
+const MAX_RETRY = 3;
+const failedUrls = new Set<string>();
+
+function BasemapImg({ url, alt }: { url: string; alt: string }) {
+  const [src, setSrc] = useState<string>(url);
+  const [failed, setFailed] = useState<boolean>(() => failedUrls.has(url));
+  const attemptRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setSrc(url);
+    setFailed(failedUrls.has(url));
+    attemptRef.current = 0;
+    return () => {
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    };
+  }, [url]);
+
+  if (failed) {
+    return (
+      <div className="lac-card-map-placeholder">
+        <span className="lac-card-map-placeholder-text">map</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="lac-card-map-image"
+      draggable={false}
+      loading="lazy"
+      decoding="async"
+      onLoad={() => { attemptRef.current = 0; }}
+      onError={() => {
+        if (attemptRef.current < MAX_RETRY) {
+          attemptRef.current++;
+          // 指数退避 + 抖动：偶发失败错峰重发（cache-bust 绕过已缓存的失败响应）。
+          const delay = Math.min(4000, 500 * 2 ** (attemptRef.current - 1)) + Math.random() * 400;
+          timerRef.current = setTimeout(() => {
+            const sep = url.includes('?') ? '&' : '?';
+            setSrc(`${url}${sep}_r=${Date.now()}`);
+          }, delay);
+        } else {
+          failedUrls.add(url);
+          setFailed(true);
+        }
+      }}
+    />
+  );
 }
 
 // ─── Web Mercator math ──────────────────────────────────────────────────
@@ -192,7 +251,7 @@ export default function PlaceStaticMap({
 
   return (
     <>
-      <img src={url} alt={placeName} className="lac-card-map-image" draggable={false} />
+      <BasemapImg url={url} alt={placeName} />
       <svg
         className="lac-card-thumb-svg"
         viewBox="0 0 100 100"

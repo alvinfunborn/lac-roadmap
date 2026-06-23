@@ -267,3 +267,59 @@
   option { background: var(--surface-1); color: var(--text-1); }
   &:focus { border-bottom-color: var(--plan); }
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Travel-mode segmented control — replaces the native <select>. A row of
+// equal-width pills (line glyph + mono caption); the active mode fills with
+// the gold `--plan` ink on an ink-dark glyph, mirroring the numbered map
+// discs so the whole plugin reads as one piece.
+// ─────────────────────────────────────────────────────────────────────────
+.lac-confirm-modal .lac-mode-seg {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lac-confirm-modal .lac-mode-seg-item {
+  flex: 1 1 0;
+  min-width: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 4px 7px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-8);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+
+  .lac-mode-seg-glyph {
+    display: flex;
+    svg { width: 20px; height: 20px; display: block; }
+  }
+  .lac-mode-seg-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  &:hover {
+    background: var(--surface-3);
+    border-color: var(--hairline-strong);
+    color: var(--text-2);
+  }
+  &.is-active {
+    background: var(--plan);
+    border-color: var(--plan);
+    color: var(--ink);
+  }
+  &:disabled {
+    cursor: default;
+    // Keep the active fill readable while a calc is in flight; only fade
+    // the non-active options so the row doesn't look fully greyed out.
+    &:not(.is-active) { opacity: 0.55; }
+  }
+}

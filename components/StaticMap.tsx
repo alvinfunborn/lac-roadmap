@@ -58,14 +58,41 @@ function statusForPlace(place: Place): PlaceStatus {
 // the same projection to compute where each marker should sit on top of
 // the basemap image, then render the marker as a DOM circle / pin via
 // percentage offsets (so it scales with the displayed thumb size).
-const ZOOM = 10;
+//
+// Fallback zoom for a single marker (or all-coincident markers) — a
+// neighbourhood-to-district scale. Multi-marker trips compute a zoom that
+// fits the whole bounding box (see fitZoom) so a province-spanning trip
+// like 天山北 doesn't push every pin off the 400px frame at a fixed zoom.
+const DEFAULT_ZOOM = 10;
+
+/** Largest integer zoom at which the markers' bounding box still fits inside
+ *  ~78% of the source image (mirrors PlaceStaticMap's autoFit). */
+function fitZoom(lats: number[], lngs: number[], sourcePx: number): number {
+  const latMin = Math.min(...lats), latMax = Math.max(...lats);
+  const lngMin = Math.min(...lngs), lngMax = Math.max(...lngs);
+  if (lats.length <= 1 || (latMin === latMax && lngMin === lngMax)) return DEFAULT_ZOOM;
+  // World pixels at zoom 0 (tile size 256).
+  const lngToX0 = (l: number) => (l + 180) / 360 * 256;
+  const latToY0 = (l: number) => {
+    const s = Math.sin(l * Math.PI / 180);
+    return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256;
+  };
+  const dx = Math.abs(lngToX0(lngMax) - lngToX0(lngMin));
+  const dy = Math.abs(latToY0(latMin) - latToY0(latMax));
+  const target = sourcePx * 0.78;
+  const zoomX = dx > 0 ? Math.log2(target / dx) : 20;
+  const zoomY = dy > 0 ? Math.log2(target / dy) : 20;
+  // Clamp to 16 — AMap static maps top out around 17; 16 keeps a margin.
+  return Math.max(1, Math.min(16, Math.floor(Math.min(zoomX, zoomY))));
+}
 
 function latLngToPct(
   lat: number, lng: number,
   centerLat: number, centerLng: number,
   imagePx: number,
+  zoom: number,
 ): { xPct: number; yPct: number; visible: boolean } {
-  const worldSize = 256 * Math.pow(2, ZOOM);
+  const worldSize = 256 * Math.pow(2, zoom);
   const lngToX = (l: number) => (l + 180) / 360 * worldSize;
   const latToY = (l: number) => {
     const sinLat = Math.sin(l * Math.PI / 180);
@@ -146,36 +173,34 @@ export default function StaticMap({ roadmap, settings }: StaticMapProps) {
       }
 
       try {
-        const avgLng = rawMarkers.reduce((s, p) => s + p.lng, 0) / rawMarkers.length;
-        const avgLat = rawMarkers.reduce((s, p) => s + p.lat, 0) / rawMarkers.length;
+        // Center on the bounding-box midpoint (not the average) and pick a
+        // zoom that fits every marker — a fixed zoom pushed pins off-frame
+        // on wide trips (e.g. 天山北 spans ~800 km across Xinjiang), leaving
+        // the basemap with no visible markers.
+        const lats = rawMarkers.map(p => p.lat);
+        const lngs = rawMarkers.map(p => p.lng);
+        const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
         // Source-image px size — matches the `size` param we request from
         // the API. Used by the Mercator math so marker offsets map onto
-        // the right fraction of the rendered thumb.
-        //
-        // Both providers use 400 px so they cover the same geographic
-        // span at zoom 10 (~0.55° of longitude — enough for a city-scale
-        // trip). The previous Google build used 100 px, which only
-        // showed ~0.14° — most trip markers fell outside the image and
-        // were filtered out by the visible() guard, so Google thumbs
-        // appeared empty. AMap was unaffected because it already used
-        // 400. Same source size now → identical geographic coverage,
-        // identical marker math, both providers behave the same.
+        // the right fraction of the rendered thumb. Both providers use 400 px.
         const sourcePx = 400;
+        const zoom = fitZoom(lats, lngs, sourcePx);
 
         if (useGaode) {
           // Clean basemap — no `markers=`, we overlay our own.
           const params = new URLSearchParams({
             key: settings.gaodeWebServiceKey || '',
-            location: `${avgLng},${avgLat}`,
-            zoom: String(ZOOM),
+            location: `${centerLng},${centerLat}`,
+            zoom: String(zoom),
             size: `${sourcePx}*${sourcePx}`,
           });
           setMapUrl(`https://restapi.amap.com/v3/staticmap?${params.toString()}`);
         } else {
           const params = new URLSearchParams({
-            center: `${avgLat},${avgLng}`,
-            zoom: String(ZOOM),
+            center: `${centerLat},${centerLng}`,
+            zoom: String(zoom),
             size: `${sourcePx}x${sourcePx}`,
             maptype: 'terrain',
             key: settings.googleMapsApiKey || '',
@@ -186,7 +211,7 @@ export default function StaticMap({ roadmap, settings }: StaticMapProps) {
         // Compute per-marker DOM positions and stash for render.
         const positioned: PositionedMarker[] = [];
         for (const m of rawMarkers) {
-          const { xPct, yPct, visible } = latLngToPct(m.lat, m.lng, avgLat, avgLng, sourcePx);
+          const { xPct, yPct, visible } = latLngToPct(m.lat, m.lng, centerLat, centerLng, sourcePx, zoom);
           if (!visible) continue;
           if (m.kind === 'roadmap') {
             positioned.push({ kind: 'roadmap', xPct, yPct });

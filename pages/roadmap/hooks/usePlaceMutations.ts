@@ -457,14 +457,42 @@ export function usePlaceMutations({
       && isPlace(data.items[itemIndex])
       && (data.items[itemIndex] as Place).name === p.name
     ) ? itemIndex : data.items.findIndex(it => isPlace(it) && (it as Place).name === p.name);
+
+    // 删除一个地点时，它两侧最多各有一条交通段。两地点间只允许一条段，所以删点要
+    // 连带删掉一条段：优先删它「后面」那条（覆盖删首/中间点），若它是末尾点（后面
+    // 没有段）则删它「前面」那条，避免留下指向空地点的悬挂段。
+    const after = data.items[targetIdx + 1];
+    const before = data.items[targetIdx - 1];
+    const dropAfterIdx = (targetIdx >= 0 && isRouteSegment(after)) ? targetIdx + 1 : -1;
+    const dropBeforeIdx = (dropAfterIdx < 0 && targetIdx >= 0 && isRouteSegment(before)) ? targetIdx - 1 : -1;
     const remaining: Array<Place | RouteSegment> = [];
     for (let i = 0; i < data.items.length; i++) {
-      if (i === targetIdx) {
-        const next = data.items[i + 1];
-        if (isRouteSegment(next)) i++;
-        continue;
-      }
+      if (i === targetIdx || i === dropAfterIdx || i === dropBeforeIdx) continue;
       remaining.push(data.items[i]);
+    }
+
+    // 删的是中间点（前后都有地点）时，原本 prev→target 的交通段现在桥接 prev→next，
+    // 数据已过时 —— 保留它的 travelMode 重算成 prev→next。前缀未被改动，prevIdx 在
+    // remaining 里的位置不变。
+    if (dropAfterIdx >= 0) {
+      let prevIdx = -1;
+      for (let i = targetIdx - 1; i >= 0; i--) { if (isPlace(data.items[i])) { prevIdx = i; break; } }
+      let nextPlace: Place | undefined;
+      for (let i = targetIdx + 1; i < data.items.length; i++) { if (isPlace(data.items[i])) { nextPlace = data.items[i] as Place; break; } }
+      const bridge = prevIdx >= 0 ? remaining[prevIdx + 1] : undefined;
+      const prevPlace = prevIdx >= 0 ? (data.items[prevIdx] as Place) : undefined;
+      if (prevPlace && nextPlace && bridge && isRouteSegment(bridge)) {
+        try {
+          const service = new RouteCalculationService(settings?.googleMapsApiKey, settings?.gaodeWebServiceKey);
+          const provider = (data.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+          const result = await service.calculateRoute(prevPlace, nextPlace, (bridge as RouteSegment).travelMode, provider);
+          if (result) {
+            (bridge as RouteSegment).distance = result.distance;
+            (bridge as RouteSegment).duration = result.duration;
+            (bridge as RouteSegment).tolls = typeof result.tolls === 'number' ? result.tolls : 0;
+          }
+        } catch (e) { console.warn('[usePlaceMutations] delete bridge recalc failed', e); }
+      }
     }
     try {
       await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, remaining);
