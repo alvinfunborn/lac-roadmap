@@ -4,7 +4,11 @@
 
 Life as Code - Roadmap 是一个 Obsidian 旅行路线规划 / 记录插件。行程以 TOML 形式存放在 Markdown 中——不依赖数据库、不引入私有格式、文件本身就完全可读可改。视图把这些 TOML 渲染为田野日志风格的纵向时间线，配地图、按日分组、路线段、热力图。
 
-![image](docs/demo.png)
+<p align="center">
+  <img src="docs/demo.png" alt="LaC.Roadmap 时间轴与地图" height="460">
+  &nbsp;&nbsp;
+  <img src="docs/demo-2.jpg" alt="LaC.Roadmap 行程详情" height="460">
+</p>
 
 ## 功能特性
 

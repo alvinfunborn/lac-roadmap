@@ -4,7 +4,11 @@ English | [简体中文](README.zh-CN.md)
 
 Life as Code - Roadmap is a travel planning and journaling plugin for Obsidian. Trips are stored as TOML inside Markdown — no database, no proprietary format, fully readable and editable on their own. Render them as a journal-style timeline with maps, day grouping, route segments, and a heatmap.
 
-![image](docs/demo.png)
+<p align="center">
+  <img src="docs/demo.png" alt="LaC.Roadmap timeline & map" height="460">
+  &nbsp;&nbsp;
+  <img src="docs/demo-2.jpg" alt="LaC.Roadmap trip detail" height="460">
+</p>
 
 ## Features
 
