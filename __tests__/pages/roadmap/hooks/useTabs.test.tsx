@@ -49,19 +49,11 @@ describe('useTabs', () => {
     expect(defs[2].id).toBe('unplanned');
   });
 
-  it('tabDefs labels date keys as the key itself, "第N天" gets reformatted to "第i天" by tab index', () => {
-    const r: Roadmap = {
-      id: 'r', name: 'r',
-      items: [
-        makePlace('a', { start_time: '2025-11-01' }),
-        makePlace('b', { days: 2 }),
-      ],
-    };
+  it('preserves relative day numbers and visible items even when days are skipped', () => {
+    const r: Roadmap = { id: 'r', name: 'r', items: [makePlace('a', { days: 3 }), makePlace('b', { days: 5 })] };
     const { result } = renderHook(() => useTabsForRoadmap(r));
-    const defs = result.current.tabs.tabDefs;
-    expect(defs[0].label).toBe('2025-11-01');
-    // "第2天" key gets renumbered to "第2天" since it's the 2nd tab.
-    expect(defs[1].label).toBe('第2天');
+    expect(result.current.tabs.tabDefs.slice(0, 2).map(d => d.label)).toEqual(['第3天', '第5天']);
+    expect(result.current.tabs.visibleItemIndices).toEqual([0, 1]);
   });
 
   it('onToggleTab adds and removes selection', () => {

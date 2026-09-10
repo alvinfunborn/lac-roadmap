@@ -32,14 +32,14 @@ describe('useRoadmapGroups', () => {
     expect(result.current.groups['2025-11-02'].length).toBe(1);
   });
 
-  it('places with neither start_time nor detail.days go to the wishlist bucket (empty key)', () => {
+  it('a wholly undated roadmap defaults to Day 1', () => {
     const r: Roadmap = {
       id: 'r', name: 'r',
       items: [makePlace('a'), makePlace('b'), makePlace('c')],
     };
     const { result } = renderHook(() => useRoadmapGroups(r));
-    expect(Object.keys(result.current.groups)).toEqual(['']);
-    expect(result.current.groups[''].length).toBe(3);
+    expect(Object.keys(result.current.groups)).toEqual(['第1天']);
+    expect(result.current.groups['第1天'].length).toBe(3);
   });
 
   it('honors detail.days when present and start_time absent', () => {
@@ -69,7 +69,7 @@ describe('useRoadmapGroups', () => {
     expect('travelMode' in group[1]).toBe(true);
   });
 
-  it('groupKeys: dates first (chronological), then "第N天" numerically', () => {
+  it('a dated roadmap treats every undated place as unplanned', () => {
     const r: Roadmap = {
       id: 'r', name: 'r',
       items: [
@@ -79,7 +79,7 @@ describe('useRoadmapGroups', () => {
       ],
     };
     const { result } = renderHook(() => useRoadmapGroups(r));
-    expect(result.current.groupKeys).toEqual(['2025-11-01', '2025-11-02', '第2天']);
+    expect(result.current.groupKeys).toEqual(['2025-11-01', '2025-11-02', '']);
   });
 
   it('lastPlaceIndex points to the highest index of any Place', () => {

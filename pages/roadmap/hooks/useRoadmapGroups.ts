@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Roadmap, Place, RouteSegment } from '../../../types/roadmap';
+import { isDatedRoadmap, scheduleGroupKey } from '../../../utils/schedule';
 import { isPlace, isRouteSegment } from '../../../utils/typeGuards';
 import { compareGroupKey, isDateKey } from '../../../utils/date';
 
@@ -20,19 +21,11 @@ export function useRoadmapGroups(data: Roadmap | null): RoadmapGroups {
     const result: Record<string, Array<Place | RouteSegment>> = {};
     const keyForItem = new Map<number, string>();
     const items = data?.items || [];
+    const dated = !!data && isDatedRoadmap(data);
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (isPlace(it)) {
-        const start = it.detail?.start_time;
-        const days = it.detail?.days;
-        // 三种状态：
-        //   start_time → 真日期 key (YYYY-MM-DD)
-        //   detail.days 显式设置（用户拖到 Day-N 标签）→ "第N天" key
-        //   都没有 → 空 key，归到 wishlist 桶（在 Timeline 不显示 day label）
-        let key: string;
-        if (start) key = String(start).split(' ')[0];
-        else if (days != null) key = `第${days}天`;
-        else key = '';
+        const key = scheduleGroupKey(it, dated);
         result[key] = result[key] || [];
         result[key].push(it);
         keyForItem.set(i, key);
@@ -52,6 +45,7 @@ export function useRoadmapGroups(data: Roadmap | null): RoadmapGroups {
 
   const lastPlaceIndex = useMemo(() => {
     const items = data?.items || [];
+    const dated = !!data && isDatedRoadmap(data);
     for (let i = items.length - 1; i >= 0; i--) {
       if (isPlace(items[i])) return i;
     }

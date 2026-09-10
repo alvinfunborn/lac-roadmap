@@ -4,6 +4,7 @@ import { isPlace, isRouteSegment } from '../../../utils/typeGuards';
 import { compareGroupKey, isDateKey, formatYMD } from '../../../utils/date';
 import { PlaceStatus, getPlaceStatus } from '../../../utils/placeStatus';
 import { t } from '../../../i18n';
+import { dayNumber, isDatedRoadmap, scheduleGroupKey } from '../../../utils/schedule';
 
 export interface TabDef {
   id: string;
@@ -102,7 +103,7 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints }: 
     allKeysForTabs.forEach((k, i) => {
       if (!k) return;
       const isTemp = tempDayKeys.includes(k);
-      const label = isDateKey(k) ? k : t('tabs.day.label', { n: i + 1 });
+      const label = isDateKey(k) ? k : t('tabs.day.label', { n: Number(k.match(/第(\d+)天/)?.[1]) || i + 1 });
       defs.push({ id: isTemp ? `temp-${k}` : `day-${i + 1}`, label, key: k, isTemp });
     });
     defs.push({ id: 'unplanned', label: t('tabs.unplanned') });
@@ -185,6 +186,7 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints }: 
   const visibleItemIndices = useMemo(() => {
     const items = data?.items || [];
     const keySet = new Set(filteredKeys);
+    const dated = !!data && isDatedRoadmap(data);
     // 渲染规范化：tier 0 = 已排日期（子序按时间戳），tier 1 = 显式 days，
     // tier 2 = wishlist 永远殿后。不依赖文件存储顺序，渲染必正确。
     const rank = (p: Place): [number, number] => {
@@ -193,8 +195,7 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints }: 
         const t = new Date(String(start).replace(' ', 'T')).getTime();
         if (!isNaN(t)) return [0, t];
       }
-      const days = p.detail?.days;
-      if (days != null) return [1, days];
+      if (!dated) return [1, dayNumber(p)];
       return [2, 0];
     };
     const collected: Array<{ index: number; rank: [number, number] }> = [];
@@ -204,13 +205,13 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints }: 
       const p = it as Place;
       const start = p.detail?.start_time;
       const days = p.detail?.days;
-      const key = start ? String(start).split(' ')[0] : (days != null ? `第${days}天` : '');
+      const key = scheduleGroupKey(p, dated);
       if (keySet.has(key)) collected.push({ index: i, rank: rank(p) });
     }
     collected.sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.index - b.index);
     const out = collected.map(c => c.index);
     return out;
-  }, [data?.items, filteredKeys]);
+  }, [data, filteredKeys]);
 
   return {
     selectedTabs,

@@ -6,6 +6,7 @@ import { RouteCalculationService } from '../../../services/RouteCalculationServi
 import { extractTimeFromDateTime } from '../../../utils/timeValidation';
 import { isPlace, isRouteSegment } from '../../../utils/typeGuards';
 import { compareGroupKey, isDateKey } from '../../../utils/date';
+import { anchorFromPlace } from '../../../utils/schedule';
 
 // sortablejs UMD 导出：default 或直接挂载，兼容 esbuild 打包
 type SortableInstance = { destroy: () => void };
@@ -175,7 +176,8 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     //
     // 不再写共享 place 文件 —— per-trip 的 start_time/end_time 走 trip 文件
     // （后面的 updateRoadmapItems 会一并写回）。
-    const droppedPlace = isPlace(block[0]) ? block[0] : undefined;
+    const droppedPlace = isPlace(block[0]) ? { ...block[0], detail: { ...block[0].detail } } : undefined;
+    if (droppedPlace) block[0] = droppedPlace;
     if (droppedPlace && droppedPlace.detail?.start_time) {
       const datePart = (s: string | undefined) => s ? String(s).split(' ')[0] : '';
       const currentDate = datePart(droppedPlace.detail.start_time);
@@ -218,7 +220,8 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     const nextItem = items[from + 1];
     const takeCount = isPlace(fromItem) && isRouteSegment(nextItem) ? 2 : 1;
     const block = items.splice(from, takeCount);
-    const droppedPlace = isPlace(block[0]) ? block[0] : undefined;
+    const droppedPlace = isPlace(block[0]) ? { ...block[0], detail: { ...block[0].detail } } : undefined;
+    if (droppedPlace) block[0] = droppedPlace;
     if (!droppedPlace) return;
 
     const isDate = isDateKey(targetKey);
@@ -292,9 +295,10 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     // 拖到最后一个日期分组时整块可能落在末尾，出向段失去终点 —— 同样规整掉。
     stripDanglingSegments(items);
 
+    const scheduled = anchorFromPlace(data, items, items.indexOf(droppedPlace), from);
     await repository.savePlaceFile(folder, droppedPlace);
-    await recalculateAffectedRoutes(data.items, items);
-    await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, items);
+    await recalculateAffectedRoutes(data.items, scheduled);
+    await repository.updateRoadmapItems(filePath, data.name, data.detail || {}, scheduled);
     if (tempDayKeys.includes(targetKey)) setTempDayKeys(prev => prev.filter(k => k !== targetKey));
     const r = await repository.loadRoadmap(filePath);
     onDataChanged(r);

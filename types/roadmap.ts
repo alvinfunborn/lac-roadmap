@@ -20,7 +20,7 @@ export interface PlaceDetail {
   end_time?: string;
   description?: string;
   address?: Address;
-  /** 用于无 start_time 的地点，表示第几天；存于地点 [detail]；编辑器不展示，可自动推断 */
+  /** 用于无 start_time 的地点，表示第几天；存于线路内每次地点引用的 days 覆盖行；编辑器不展示，可自动推断 */
   days?: number;
 }
 

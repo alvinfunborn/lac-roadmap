@@ -10,6 +10,7 @@ import { RouteCalculationService } from '../../../services/RouteCalculationServi
 import ConfirmModal from '../../../components/modals/ConfirmModal';
 import { RoadmapEditPayload } from '../../../components/modals/RoadmapEditModal';
 import { t } from '../../../i18n';
+import { anchorFromPlace } from '../../../utils/schedule';
 
 interface PlaceEditPayload {
   name: string;
@@ -343,6 +344,9 @@ export function usePlaceMutations({
     const originalName = isEdit ? editInitial!.name : null;
     // 用 itemIndex 锁定要替换的具体位置，避免同名重复时误替换。
     const editIndex = editInitial?.itemIndex;
+    if (!payload.start_time && typeof editIndex === 'number' && isPlace(data.items[editIndex])) {
+      place.detail.days = (data.items[editIndex] as Place).detail.days;
+    }
     const indexPointsToOriginal = (
       typeof editIndex === 'number'
       && editIndex >= 0
@@ -401,6 +405,9 @@ export function usePlaceMutations({
       nextItems = [...base.slice(0, insertIdx), place, ...base.slice(insertIdx)];
       await applyRoutesAroundPlace(nextItems, place, 'insert-if-missing');
     }
+
+    const savedIndex = nextItems.indexOf(place);
+    if (savedIndex >= 0) nextItems = anchorFromPlace(data, nextItems, savedIndex, isEdit && typeof editIndex === 'number' ? editIndex : -1);
 
     // 编辑场景下坐标变了 → 强制重算前后已有 route segment（保留原 travelMode）。
     if (isEdit) {

@@ -12,6 +12,7 @@ import DatePicker from '../../components/DatePicker';
 import { isPlace } from '../../utils/typeGuards';
 import { compareGroupKey, isDateKey, formatYMD } from '../../utils/date';
 import { getPlaceStatus } from '../../utils/placeStatus';
+import { dayNumber, setRoadmapDate } from '../../utils/schedule';
 import { MapLocation } from '../../types/map';
 import { t } from '../../i18n';
 
@@ -228,8 +229,8 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         const it = items[i];
         if (!isPlace(it)) continue;
         const p = it as Place;
-        const d = p.detail?.days;
-        if (typeof d === 'number') {
+        const d = dayNumber(p);
+        if (!p.detail.start_time) {
           const target = addDays(newDate, d - nDays);
           const detail = { ...(p.detail || {}), start_time: target };
           delete detail.days;
@@ -243,7 +244,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         const p = it as Place;
         const hasStart = !!p.detail?.start_time;
         const hasDays = p.detail?.days != null;
-        if (!hasStart && !hasDays) {
+        if (!hasStart) {
           items[i] = { ...p, detail: { ...(p.detail || {}), start_time: newDate } };
         }
       }
@@ -454,6 +455,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
    *     time-of-day 保留；end_time 一并按同 delta 顺移。
    *   - 如果当前所有 place 都没有具体日期、只有 detail.days（规划态），新 start
    *     被当作「第 1 天」基准，把所有 days=N 的 place 展开成具体日期，days 字段清掉。
+   *   - 清空日期时，清掉所有地点的 start/end，按日期间隔还原 days；未安排项放最后一天。
    *   - 保存前重新派生 detail.start_time / detail.end_time：取整理后 items 中
    *     已有 start_time 的最早 / 最晚一项的日期。保留 detail 里这两个字段是
    *     为了 roadmapset 列表页能直接按 trip 排序，不必再加载每条 trip 的 items。
@@ -461,67 +463,8 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
   const saveMetaEditor = async (payload: RoadmapEditPayload) => {
     if (!data) return;
     try {
-      const shiftDateInString = (s: string, deltaDays: number): string => {
-        const m = String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})(.*)$/);
-        if (!m) return s;
-        const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-        dt.setDate(dt.getDate() + deltaDays);
-        return `${formatYMD(dt)}${m[4]}`;
-      };
-      const addDaysYMD = (ymd: string, n: number): string => {
-        const [y, mo, d] = ymd.split('-').map(Number);
-        const dt = new Date(y, (mo || 1) - 1, d || 1);
-        dt.setDate(dt.getDate() + n);
-        return formatYMD(dt);
-      };
-      const daysBetween = (a: string, b: string): number => {
-        const [ay, am, ad] = a.split('-').map(Number);
-        const [by, bm, bd] = b.split('-').map(Number);
-        return Math.round(
-          (new Date(by, bm - 1, bd).getTime() - new Date(ay, am - 1, ad).getTime()) / 86400000,
-        );
-      };
-
-      // 当前首个 dated place 的日期（顺移基准）
-      let oldAnchor: string | undefined;
-      for (const it of (data.items || [])) {
-        if (isPlace(it) && (it as Place).detail?.start_time) {
-          oldAnchor = String((it as Place).detail!.start_time).slice(0, 10);
-          break;
-        }
-      }
-      const newStart = payload.detail.start_time
-        ? String(payload.detail.start_time).slice(0, 10)
-        : '';
-
-      let items: Array<Place | RouteSegment> = (data.items || []).slice();
-
-      if (newStart && oldAnchor && newStart !== oldAnchor) {
-        const delta = daysBetween(oldAnchor, newStart);
-        items = items.map(it => {
-          if (!isPlace(it)) return it;
-          const p = it as Place;
-          const st = p.detail?.start_time;
-          if (!st) return p;
-          const nextDetail = { ...(p.detail || {}), start_time: shiftDateInString(String(st), delta) };
-          if (p.detail?.end_time) {
-            nextDetail.end_time = shiftDateInString(String(p.detail.end_time), delta);
-          }
-          return { ...p, detail: nextDetail };
-        });
-      } else if (newStart && !oldAnchor) {
-        // 规划态 → 具体日期：把 days=N 展开成 newStart + (N-1) 天
-        items = items.map(it => {
-          if (!isPlace(it)) return it;
-          const p = it as Place;
-          const d = p.detail?.days;
-          if (typeof d !== 'number') return p;
-          const nextDetail = { ...(p.detail || {}), start_time: addDaysYMD(newStart, d - 1) };
-          delete nextDetail.days;
-          return { ...p, detail: nextDetail };
-        });
-      }
-
+      const items = setRoadmapDate(data.items, payload.detail.start_time);
+      setTempDayKeys([]);
       // 重新派生 trip-level start / end —— 取 items 中 dated place 的最早 / 最晚
       const datedTimes = items
         .filter(it => isPlace(it) && (it as Place).detail?.start_time)
@@ -536,7 +479,9 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
       if (!payload.detail.map_provider) delete nextDetail.map_provider;
       if (!payload.detail.description) delete nextDetail.description;
       if (!payload.detail.address) delete nextDetail.address;
-      if (derivedTripStart) nextDetail.start_time = derivedTripStart; else delete nextDetail.start_time;
+      if (derivedTripStart) nextDetail.start_time = derivedTripStart;
+      else if (!items.some(isPlace) && payload.detail.start_time) nextDetail.start_time = payload.detail.start_time;
+      else delete nextDetail.start_time;
       if (derivedTripEnd) nextDetail.end_time = derivedTripEnd; else delete nextDetail.end_time;
 
       // 写整条 trip：items 顺移完毕后通过 updateRoadmapItems 落盘，header 顺带更新。

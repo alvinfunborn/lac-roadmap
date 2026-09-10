@@ -509,3 +509,20 @@ describe('usePlaceMutations — parent route sync on sub-roadmap endpoint change
     expect(findRoadmapsReferencingPlace).not.toHaveBeenCalled();
   });
 });
+
+
+describe('first place date anchors relative days', () => {
+  it('writes dates to every occurrence when editing Day 3 and keeps ordinary Day-N edits', async () => {
+    const a: Place = { id: 'A', name: 'A', detail: { days: 1 } };
+    const b: Place = { id: 'B', name: 'B', detail: { days: 3 } };
+    const data: Roadmap = { id: 'R', name: 'R', detail: {}, items: [a, b] };
+    const repo = makeRepoMock(data);
+    const { result } = renderHook(() => usePlaceMutations(makeHookParams({ data, repository: repo as any })));
+    act(() => result.current.editPlace(b, 1));
+    await act(async () => { await result.current.onSavePlace({ name: 'B', description: 'note' }); });
+    expect(repo.updateRoadmapItems.mock.calls[0][3][1].detail.days).toBe(3);
+    act(() => result.current.editPlace(b, 1));
+    await act(async () => { await result.current.onSavePlace({ name: 'B', start_time: '2026-10-03' }); });
+    expect(repo.updateRoadmapItems.mock.calls[1][3].map((p: Place) => p.detail.start_time)).toEqual(['2026-10-01', '2026-10-03']);
+  });
+});

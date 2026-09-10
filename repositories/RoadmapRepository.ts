@@ -3,6 +3,7 @@ import * as TOML from 'toml';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const TOMLStringify: { toToml: (obj: unknown) => string } = require('tomlify-j0.4');
 import { Roadmap, Place, RouteSegment, computeRoadmapEndpoints } from '../types/roadmap';
+import { dayNumber, isDatedRoadmap, scheduleDetail } from '../utils/schedule';
 
 /** 解析后的 TOML 头部（路线 / 地点 / 根文件共用，字段都可缺省） */
 interface ParsedTomlHeader {
@@ -168,6 +169,8 @@ export class RoadmapRepository {
                 if (ms) place.detail.start_time = ms[1];
                 const me = la.match(/^end_time\s*=\s*"([^"]+)"/);
                 if (me) place.detail.end_time = me[1];
+                const md = la.match(/^days\s*=\s*(\d+)/);
+                if (md && Number(md[1]) > 0) place.detail.days = Number(md[1]);
                 // 若遇到 route 行也停止继续向下看
                 if (/^route\s*=\s*\{/.test(la)) break;
               }
@@ -177,7 +180,7 @@ export class RoadmapRepository {
             for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
               const next = lines[j].trim();
               if (!next) continue; // 跳过空行
-              if (/^(start_time|end_time)\s*=/.test(next)) continue; // 跳过时间覆盖行
+              if (/^(start_time|end_time|days)\s*=/.test(next)) continue; // 跳过时间覆盖行
               if (next.startsWith('[[')) break; // 下一个地点
               const r = next.match(/^route\s*=\s*\{([^}]*)\}/);
               if (r) {
@@ -388,7 +391,7 @@ export class RoadmapRepository {
     const markers = await this.readPreservedMarkers(filePath);
     if (markers.type !== undefined) headerObj.type = markers.type;
     if (markers.renders !== undefined) headerObj.renders = markers.renders;
-    if (detail && typeof detail === 'object') headerObj.detail = detail;
+    headerObj.detail = scheduleDetail(detail || {}, items);
     const headerToml = this.stringifyToml(headerObj);
     const escape = (s: string) => String(s).replace(/"/g, '\\"');
 
@@ -410,14 +413,14 @@ export class RoadmapRepository {
     }
     // 排序 key：[tier, sub]。tier 越小越靠前。
     // tier=0 已排日期 → sub = 时间戳；tier=1 显式 days → sub = days；tier=2 wishlist。
+    const dated = isDatedRoadmap({ id: filePath, name, detail: headerObj.detail, items });
     const rank = (p: Place): [number, number] => {
       const start = p.detail?.start_time;
       if (start) {
         const t = new Date(String(start).replace(' ', 'T')).getTime();
         if (!isNaN(t)) return [0, t];
       }
-      const days = p.detail?.days;
-      if (days != null) return [1, days];
+      if (!dated) return [1, dayNumber(p)];
       return [2, 0];
     };
     // Array.prototype.sort 在 V8 是 stable —— 同 rank 的 block 保留原相对位置
@@ -436,6 +439,7 @@ export class RoadmapRepository {
       const et = place.detail?.end_time;
       if (st) bodyLines.push(`start_time = "${escape(st)}"`);
       if (et) bodyLines.push(`end_time = "${escape(et)}"`);
+      if (!st && Number.isInteger(place.detail?.days) && place.detail.days! > 0) bodyLines.push(`days = ${place.detail.days}`);
       if (route) {
         const kv: string[] = [`travelMode = "${route.travelMode}"`];
         if (typeof route.distance === 'number') kv.push(`distance = ${route.distance}`);
