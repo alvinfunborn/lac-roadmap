@@ -425,3 +425,26 @@ describe('RoadmapRepository', () => {
     });
   });
 });
+
+ it('retains dragged order, visit times and outgoing routes across save/reload', async () => {
+   const app = createApp();
+   seedRoot(app, ['Manual']);
+   for (const name of ['A', 'B', 'Earlier', 'Wish']) seedPlace(app, name);
+   seedRoadmap(app, 'Manual', []);
+   const repo = new RoadmapRepository(app as any, ROOT_PATH);
+   const visit = (name: string, start?: string): Place => ({ id: name, name, detail: start ? {start_time: start} : {} });
+   const items: Array<Place | RouteSegment> = [
+     visit('B', '2026-09-29 11:00'), {travelMode: 'drive', distance: 1200, duration: 8},
+     visit('A', '2026-09-29 08:30'),
+     visit('B', '2026-09-29'), visit('Earlier', '2026-09-28 18:00'), visit('Wish'),
+   ];
+   const path = 'LaC/Roadmap/Manual.md';
+   await repo.updateRoadmapItems(path, 'Manual', {}, items);
+   const loaded = (await repo.loadRoadmap(path))!;
+   expect(loaded.items.map(x => 'name' in x ? x.name : x.travelMode)).toEqual(['Earlier','B','drive','A','B','Wish']);
+   expect((loaded.items[1] as Place).detail.start_time).toBe('2026-09-29 11:00');
+   expect((loaded.items[3] as Place).detail.start_time).toBe('2026-09-29 08:30');
+   expect(loaded.items[2]).toMatchObject({travelMode:'drive', distance:1200, duration:8});
+   await repo.updateRoadmapItems(path, loaded.name, loaded.detail, loaded.items);
+   expect((await repo.loadRoadmap(path))!.items).toEqual(loaded.items);
+ });

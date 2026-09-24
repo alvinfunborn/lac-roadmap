@@ -187,12 +187,12 @@ export function useTabs({ data, groups, groupKeys, tempDayKeys, subEndpoints }: 
     const items = data?.items || [];
     const keySet = new Set(filteredKeys);
     const dated = !!data && isDatedRoadmap(data);
-    // 渲染规范化：tier 0 = 已排日期（子序按时间戳），tier 1 = 显式 days，
-    // tier 2 = wishlist 永远殿后。不依赖文件存储顺序，渲染必正确。
+    // 渲染规范化：tier 0 = 已排日期（仅按日分组，同日保留手动顺序），tier 1 = 显式 days，
+    // tier 2 = wishlist 永远殿后。同一天内以文件顺序为准，不按时刻覆盖拖拽结果。
     const rank = (p: Place): [number, number] => {
       const start = p.detail?.start_time;
       if (start) {
-        const t = new Date(String(start).replace(' ', 'T')).getTime();
+        const t = new Date(String(start).slice(0, 10) + 'T00:00:00Z').getTime();
         if (!isNaN(t)) return [0, t];
       }
       if (!dated) return [1, dayNumber(p)];

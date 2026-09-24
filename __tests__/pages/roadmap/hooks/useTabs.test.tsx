@@ -245,3 +245,18 @@ describe('useTabs', () => {
     expect(tempDef!.key).toBe('第3天');
   });
 });
+
+ it('preserves manual visit order within a day despite reversed times, including repeated places', () => {
+   const r: Roadmap = { id: 'r', name: 'r', items: [
+     makePlace('B', { start_time: '2026-09-29 11:00' }),
+     makeRoute('drive'),
+     makePlace('A', { start_time: '2026-09-29 08:30' }),
+     makePlace('B', { start_time: '2026-09-29' }),
+     makePlace('Earlier', { start_time: '2026-09-28 18:00' }),
+     makePlace('Wish'),
+   ] };
+   const { result } = renderHook(() => useTabsForRoadmap(r));
+   expect(result.current.tabs.visibleItemIndices).toEqual([4, 0, 2, 3, 5]);
+   act(() => result.current.tabs.onToggleTab('day-2'));
+   expect(result.current.tabs.visibleItemIndices).toEqual([0, 2, 3]);
+ });

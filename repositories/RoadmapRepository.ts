@@ -381,7 +381,7 @@ export class RoadmapRepository {
   //  1) per-place 的 start_time/end_time（来自 place.detail）必须以"覆盖行"形式
   //     落在 [[Place]] 之后、route 之前，否则下次重写会把这些时间丢光。
   //  2) 写之前对 (Place, 紧随的 route) 配对做 canonical 排序：有 start_time 的
-  //     按时间戳升序；只有 detail.days 的按 days 升序；两者都没有的（wishlist）
+  //     按日期升序（不比较当天时刻）；只有 detail.days 的按 days 升序；两者都没有的（wishlist）
   //     落到最后。stable sort 保留同层内的相对顺序，让用户手动微调不被打乱。
   //     这样无论文件之前怎么乱，保存一次就归到正确顺序，wishlist 永远在尾巴。
   async updateRoadmapItems(filePath: string, name: string, detail: any, items: Array<Place | RouteSegment>): Promise<void> {
@@ -412,12 +412,12 @@ export class RoadmapRepository {
       }
     }
     // 排序 key：[tier, sub]。tier 越小越靠前。
-    // tier=0 已排日期 → sub = 时间戳；tier=1 显式 days → sub = days；tier=2 wishlist。
+    // tier=0 已排日期 → sub = 当天 UTC 零点；tier=1 显式 days → sub = days；tier=2 wishlist。
     const dated = isDatedRoadmap({ id: filePath, name, detail: headerObj.detail, items });
     const rank = (p: Place): [number, number] => {
       const start = p.detail?.start_time;
       if (start) {
-        const t = new Date(String(start).replace(' ', 'T')).getTime();
+        const t = new Date(String(start).slice(0, 10) + 'T00:00:00Z').getTime();
         if (!isNaN(t)) return [0, t];
       }
       if (!dated) return [1, dayNumber(p)];
