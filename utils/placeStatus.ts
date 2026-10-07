@@ -12,7 +12,7 @@ export function getPlaceStatus(place: Place): PlaceStatus {
   const startTime = place.detail?.start_time;
   const endTime = place.detail?.end_time;
   const hasDate = !!startTime && /^\d{4}-\d{2}-\d{2}/.test(startTime);
-  if (!hasDate) return 'wish';
+  if (!hasDate) return place.detail?.days != null ? 'plan' : 'wish';
   const now = new Date();
   try {
     if (startTime) {

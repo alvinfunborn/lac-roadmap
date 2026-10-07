@@ -1,3 +1,4 @@
+import MapStatusLegend from './MapStatusLegend';
 import React, { useEffect, useRef, useState } from 'react';
 import { MapSelectorProps, MapLocation, MapSearchResult } from '../../types/map';
 import { MapProviderFactory } from './providers/MapProviderFactory';
@@ -141,7 +142,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
         try { inst.drawPolylines(segs); } catch {}
       }
       try {
-        markers.push(...inst.displaySearchMarkers(points.map(toResult), () => {}, { markerStyle: 'circle' }));
+        markers.push(...inst.displaySearchMarkers(points.map(toResult), () => {}, { markerStyle: 'circle', statuses: points.map(p => p.status) }));
       } catch {}
     }
     routeMarkersRef.current = markers;
@@ -162,99 +163,60 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
     }
   }, [initialLocation]);
 
-  // Init map.
+  // Provider selection belongs to this visible modal, not a window-wide event.
   useEffect(() => {
-    if (!visible || disabled) return;
-    setMapError(null);
-    const init = async () => {
-      try {
-        const availableProviders: string[] = [];
-        if (settings.gaodeJsApiKey || settings.gaodeWebServiceKey) availableProviders.push('gaode');
-        if (settings.googleMapsApiKey) availableProviders.push('google');
-        const currentProvider = (settings.mapApiProvider || 'google') as 'gaode' | 'google';
-        const apiKey = currentProvider === 'google' ? settings.googleMapsApiKey : (settings.gaodeJsApiKey || settings.gaodeWebServiceKey);
-        if (!apiKey) return;
-        const provider = MapProviderFactory.createProvider(currentProvider, apiKey, 'zh', currentProvider === 'gaode' ? settings.gaodeWebServiceKey : undefined);
-        providerRef.current = provider;
-        if (mapContainerRef.current) {
-          await provider.initMap(mapContainerRef.current, initialLocation, availableProviders);
-          // readOnly：viewer 模式不收 click，避免误触改路径。
-          if (!readOnly) provider.onMapClick(handleMapClick);
-          // Wait one frame for the provider's tile/canvas to settle
-          // before drawing the overlay (mirrors AggregatedMap recipe).
-          await new Promise(r => requestAnimationFrame(r));
-          renderRouteOverlay(currentProvider);
-          setMapLoaded(true);
-        }
-        setCurrentProvider(currentProvider);
-      } catch (error: any) {
-        console.error('[MapSelector] Failed to initialize map:', error);
-        setMapError(error?.message || '地图加载失败，可能是网络连接问题或 API Key 配置错误');
-        setMapLoaded(false);
-      }
-    };
-    init();
-    return () => {
-      if (providerRef.current) {
-        providerRef.current.destroy();
-        providerRef.current = null;
-      }
-      searchMarkersRef.current = [];
-    };
-  }, [visible, settings.mapApiProvider, initialLocation]);
+    if (visible) setCurrentProvider(settings.mapApiProvider || 'google');
+  }, [visible, settings.mapApiProvider]);
 
-  // Listen for provider-switch events (emitted by the dropdown menu below).
   useEffect(() => {
-    const handleProviderSwitch = async (event: CustomEvent) => {
-      const { provider: newProvider } = event.detail;
-      if (newProvider === currentProvider) return;
+    const container = mapContainerRef.current;
+    if (!visible || disabled || !container) return;
+    const target = currentProvider as ProviderKey;
+    const apiKey = target === 'google' ? settings.googleMapsApiKey : (settings.gaodeJsApiKey || settings.gaodeWebServiceKey);
+    if (!apiKey) return;
+    let cancelled = false;
+    // Give each initialization its own DOM host, so a late SDK response cannot
+    // paint into (or destroy) the next provider's map after a quick switch.
+    const host = document.createElement('div');
+    host.style.cssText = 'width:100%;height:100%';
+    container.replaceChildren(host);
+    const inst = MapProviderFactory.createProvider(target, apiKey, 'zh', target === 'gaode' ? settings.gaodeWebServiceKey : undefined);
+    providerRef.current = inst;
+    setMapLoaded(false);
+    setMapError(null);
+    setSearchResults([]);
+    setSearchError('');
+    const available: string[] = [];
+    if (settings.gaodeJsApiKey || settings.gaodeWebServiceKey) available.push('gaode');
+    if (settings.googleMapsApiKey) available.push('google');
+    (async () => {
       try {
-        setSearchResults([]);
-        setSearchError('');
-        if (providerRef.current && searchMarkersRef.current.length > 0) {
-          providerRef.current.clearMarkers(searchMarkersRef.current);
-          searchMarkersRef.current = [];
+        const location = userSelectedNewLocationRef.current ? selectedLocationRef.current || undefined : initialLocation;
+        await inst.initMap(host, location, available);
+        if (cancelled) { inst.destroy(); return; }
+        if (!readOnly) inst.onMapClick(handleMapClick);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        if (cancelled) return;
+        renderRouteOverlay(target);
+        setMapLoaded(true);
+      } catch (error: any) {
+        if (!cancelled) {
+          setMapError(error?.message || '地图加载失败');
+          setMapLoaded(false);
         }
-        if (providerRef.current) {
-          providerRef.current.destroy();
-          providerRef.current = null;
-        }
-        if (mapContainerRef.current) {
-          mapContainerRef.current.innerHTML = '';
-        }
-        const apiKey = newProvider === 'google'
-          ? settings.googleMapsApiKey
-          : (settings.gaodeJsApiKey || settings.gaodeWebServiceKey);
-        if (!apiKey) return;
-        const availableProviders: string[] = [];
-        if (settings.gaodeJsApiKey || settings.gaodeWebServiceKey) availableProviders.push('gaode');
-        if (settings.googleMapsApiKey) availableProviders.push('google');
-        const provider = MapProviderFactory.createProvider(newProvider, apiKey, 'zh', newProvider === 'gaode' ? settings.gaodeWebServiceKey : undefined);
-        providerRef.current = provider;
-        if (mapContainerRef.current) {
-          const locationToUse = userSelectedNewLocationRef.current
-            ? (selectedLocationRef.current || undefined)
-            : initialLocation;
-          await provider.initMap(mapContainerRef.current, locationToUse, availableProviders);
-          if (!readOnly) provider.onMapClick(handleMapClick);
-          // No explicit `provider.addMarker(locationToUse, ...)` here —
-          // the current edit place is now rendered by `renderRouteOverlay`
-          // as one of the numbered route markers, so a separate
-          // red default pin would just duplicate it offset (image 36).
-          await new Promise(r => requestAnimationFrame(r));
-          renderRouteOverlay(newProvider as 'google' | 'gaode');
-          setMapLoaded(true);
-        }
-        setCurrentProvider(newProvider);
-      } catch (error) {
-        console.error('Failed to switch map provider:', error);
       }
-    };
-    window.addEventListener('mapProviderSwitch', handleProviderSwitch as unknown as EventListener);
+    })();
     return () => {
-      window.removeEventListener('mapProviderSwitch', handleProviderSwitch as unknown as EventListener);
+      cancelled = true;
+      inst.destroy();
+      host.remove();
+      if (providerRef.current === inst) providerRef.current = null;
+      searchMarkersRef.current = [];
+      routeMarkersRef.current = [];
     };
-  }, [currentProvider, settings.mapApiProvider, settings.googleMapsApiKey, settings.gaodeJsApiKey, settings.gaodeWebServiceKey, initialLocation]);
+  }, [visible, disabled, currentProvider, settings.googleMapsApiKey,
+    settings.gaodeJsApiKey, settings.gaodeWebServiceKey, readOnly,
+    initialLocation?.longitude, initialLocation?.latitude, initialLocation?.coordinate_system]);
 
   // Close provider menu on outside click.
   useEffect(() => {
@@ -463,7 +425,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
   const handleProviderPick = (key: ProviderKey) => {
     setProviderMenuOpen(false);
     if (key === currentProvider) return;
-    window.dispatchEvent(new CustomEvent('mapProviderSwitch', { detail: { provider: key } }));
+    setCurrentProvider(key);
   };
 
   // Build the available-provider list for the dropdown.
@@ -475,7 +437,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
   if (disabled) {
     return (
       <div className="lac-map-selector-mask" onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}>
-        <div className="lac-map-selector" onClick={(e) => e.stopPropagation()}>
+        <div className={`lac-map-selector${readOnly ? ' lac-map-selector--viewer' : ''}`} onClick={(e) => e.stopPropagation()}>
           <div className="lac-map-loading"><div className="lac-map-loading-text">地图未启用或缺少 API Key</div></div>
           <div className="lac-map-bottom-bar">
             <button className="lac-map-bottom-btn lac-map-bottom-btn--cancel" onClick={onCancel}>cancel</button>
@@ -489,7 +451,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
 
   return (
     <div ref={maskRef} className="lac-map-selector-mask" onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}>
-      <div className="lac-map-selector" onClick={(e) => e.stopPropagation()}>
+      <div className={`lac-map-selector${readOnly ? ' lac-map-selector--viewer' : ''}`} onClick={(e) => e.stopPropagation()}>
         {/* Hero map fills the entire modal; everything else is overlaid. */}
         <div className="lac-map-background">
           <div ref={mapContainerRef} className="lac-map-canvas" />
@@ -600,6 +562,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
           </div>
         )}
 
+        {readOnly && effectiveMarkerStyle === 'circle' && <MapStatusLegend />}
         {/* Bottom-left coord readout chip — gold status dot prefix matches
             image 23. Reads `● 34.9°N · 135.7°E · WGS84`. readOnly viewer
             没有 selectedLocation，chip 整体省掉。 */}

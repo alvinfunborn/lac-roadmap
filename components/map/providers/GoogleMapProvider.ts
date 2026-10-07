@@ -142,7 +142,7 @@ export class GoogleMapProvider implements IMapProvider {
               position: { lat, lng },
               map: this.mapInstance,
               title: result.name,
-              icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: fill, fillOpacity: 1, strokeColor: '#ECE4D4', strokeWeight: 1.2 }
+              icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: fill, fillOpacity: status === 'wish' ? 0 : 1, strokeColor: status === 'wish' ? fill : '#0E1316', strokeWeight: status === 'wish' ? 2 : 1.2 }
             });
           } else {
             const fill = status ? STATUS_FILL[status] : '#D3BC8D';

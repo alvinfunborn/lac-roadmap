@@ -45,3 +45,8 @@ describe('getPlaceStatus', () => {
     expect(getPlaceStatus(p({ start_time: '2026-05-15 12:00:00' }))).toBe('done');
   });
 });
+
+it('relative-day itinerary places are planned, not wishlist', () => {
+  expect(getPlaceStatus(p({ days: 2 }))).toBe('plan');
+  expect(getPlaceStatus(p({ days: 2, start_time: '09:00' }))).toBe('plan');
+});

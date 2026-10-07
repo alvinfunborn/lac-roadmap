@@ -1,3 +1,4 @@
+import MapStatusLegend from './MapStatusLegend';
 import { useEffect, useRef, useState } from 'react';
 import { App, TFile } from 'obsidian';
 import { RoadmapRepository } from '../../repositories/RoadmapRepository';
@@ -209,11 +210,10 @@ export default function AggregatedMap({ app, repository, settings, overrideLocat
               });
             }
           } else {
-            // Set-page aggregated view: single-colour circle markers, no
-            // polyline, no per-place status tint (dense scatter reads as
-            // one cohort, not a status legend).
+            // Preserve visit status in the overview as well as the trip view.
             inst.displaySearchMarkers(locations.map(toResult), () => {}, {
               markerStyle: 'circle',
+              statuses: locations.map(l => l.status),
             });
           }
           if (locations.length > 0) inst.fitBounds(locations);
@@ -267,6 +267,7 @@ export default function AggregatedMap({ app, repository, settings, overrideLocat
           <span>{pointsLabel}</span>
         </div>
       )}
+      {!showMessage && pointCount > 0 && <MapStatusLegend />}
       {!showMessage && attribution && (
         <div className="lac-aggmap-chip lac-aggmap-chip--attribute">{attribution}</div>
       )}

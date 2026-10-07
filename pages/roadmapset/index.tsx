@@ -1,3 +1,4 @@
+import { getPlaceStatus, PlaceStatus } from '../../utils/placeStatus';
 import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import CardCalendar, { buildDailyCounts } from '../../components/CardCalendar';
 import StaticMap from '../../components/StaticMap';
@@ -610,7 +611,7 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
           Aggregates every geocoded place across all loaded roadmaps so the
           viewer mirrors what AggregatedMap renders in the hero. Marker style
           is forced to `circle` + polyline off so the viewer matches the
-          hero's set-mode visual (single-colour scatter, no path). */}
+          hero's status-aware scatter, without a path. */}
       <MapSelector
         visible={mapVisible}
         initialLocation={undefined}
@@ -618,7 +619,7 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
         onConfirm={() => setMapVisible(false)}
         settings={settings}
         routeLocations={(() => {
-          const locs: { name: string; longitude: number; latitude: number; coordinate_system?: string }[] = [];
+          const locs: { name: string; longitude: number; latitude: number; coordinate_system?: string; status?: PlaceStatus }[] = [];
           for (const rm of roadmaps) {
             for (const it of rm.items || []) {
               if (it && typeof it === 'object' && 'name' in it && 'detail' in it) {
@@ -629,6 +630,7 @@ export default function RoadmapSetPage({ app, repository, settings, leaf }: Prop
                     longitude: addr.longitude,
                     latitude: addr.latitude,
                     coordinate_system: addr.coordinate_system,
+                    status: getPlaceStatus(it as any),
                   });
                 }
               }

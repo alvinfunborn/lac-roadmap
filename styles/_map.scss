@@ -580,7 +580,8 @@
   height: 10px;
   border-radius: 50%;
   background: var(--wish);
-  box-shadow: 0 0 0 2px rgba(199, 122, 74, 0.35), 0 0 0 4px rgba(199, 122, 74, 0.15);
+  border: 1px solid #0E1316;
+  box-shadow: none;
   box-sizing: border-box;
 }
 
@@ -596,3 +597,25 @@
   margin-bottom: -5px;
 }
 
+
+// Colour + fill distinguish wishlist even when overview points overlap.
+.lac-map-marker-circle--done { background: var(--done); }
+.lac-map-marker-circle--plan { background: var(--plan); }
+.lac-map-marker-circle--wish {
+  background: transparent;
+  border: 2px solid var(--wish);
+}
+.lac-map-marker-number--done { background: var(--done); }
+.lac-map-marker-number--plan { background: var(--plan); }
+.lac-map-marker-number--wish { background: var(--wish); }
+
+// Let the SDK own pan/pinch gestures; do not scroll/zoom the outer workspace.
+.lac-map-canvas {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+.lac-map-selector--viewer {
+  .lac-map-bottom-bar { pointer-events: none; backdrop-filter: none; }
+  .lac-map-bottom-btn { pointer-events: auto; }
+  .lac-aggmap-legend { bottom: 65px; }
+}
