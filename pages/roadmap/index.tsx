@@ -172,6 +172,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
     groups, groupKeys, lastPlaceIndex,
     tempDayKeys, setTempDayKeys,
     visibleItemIndices, cardListRef,
+    scrollContainerRef: listWrapperRef,
     onDataChanged: setData,
   });
 

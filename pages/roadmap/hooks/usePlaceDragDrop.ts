@@ -37,6 +37,7 @@ interface UsePlaceDragDropParams {
   setTempDayKeys: React.Dispatch<React.SetStateAction<string[]>>;
   visibleItemIndices: number[];
   cardListRef: React.RefObject<HTMLDivElement>;
+  scrollContainerRef?: React.RefObject<HTMLDivElement>;
   onDataChanged: (next: Roadmap | null) => void;
 }
 
@@ -68,6 +69,7 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     setTempDayKeys,
     visibleItemIndices,
     cardListRef,
+    scrollContainerRef,
     onDataChanged,
   } = params;
 
@@ -315,6 +317,12 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     if (!el || !data || indices.length === 0) return;
     const so = Sortable.create(el, {
       animation: 150,
+      // Electron 的原生拖拽不会可靠滚动嵌套面板，使用 Sortable 的滚动器。
+      scroll: scrollContainerRef?.current || true,
+      forceAutoScrollFallback: true,
+      bubbleScroll: false,
+      scrollSensitivity: 64,
+      scrollSpeed: 12,
       draggable: '.lac-card',
       ghostClass: 'lac-sortable-ghost',
       chosenClass: 'lac-sortable-chosen',
@@ -384,7 +392,7 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
     } as object);
     sortableRef.current = so;
     return () => { so.destroy(); sortableRef.current = null; };
-  }, [data, visibleItemIndices, cardListRef]);
+  }, [data, visibleItemIndices, cardListRef, scrollContainerRef]);
 
   return useMemo(() => ({
     dragIndexRef,

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import BasemapImage from './BasemapImage';
+import React, { useEffect, useState } from 'react';
 import { Roadmap, Place } from '../types/roadmap';
 import { MapLocation } from '../types/map';
 import { RoadmapSettings } from '../types';
@@ -121,7 +122,6 @@ export default function StaticMap({ roadmap, settings }: StaticMapProps) {
   const [hasCoordinates, setHasCoordinates] = useState(false);
   const [placeCount, setPlaceCount] = useState(0);
   const [markers, setMarkers] = useState<PositionedMarker[]>([]);
-  const imageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const generateMapUrl = () => {
@@ -233,19 +233,6 @@ export default function StaticMap({ roadmap, settings }: StaticMapProps) {
     generateMapUrl();
   }, [roadmap, settings]);
 
-  useEffect(() => {
-    if (!mapUrl || hasError || !hasCoordinates) return;
-    imageTimeoutRef.current = setTimeout(() => {
-      setHasError(true);
-    }, 10000);
-    return () => {
-      if (imageTimeoutRef.current) {
-        clearTimeout(imageTimeoutRef.current);
-        imageTimeoutRef.current = null;
-      }
-    };
-  }, [mapUrl, hasError, hasCoordinates, roadmap.name]);
-
   if (!hasCoordinates || hasError || !mapUrl) {
     return (
       <div className="lac-card-map-placeholder">
@@ -256,24 +243,7 @@ export default function StaticMap({ roadmap, settings }: StaticMapProps) {
 
   return (
     <>
-      <img
-        src={mapUrl}
-        alt={`Map for ${roadmap.name}`}
-        className="lac-card-map-image"
-        onError={() => {
-          if (imageTimeoutRef.current) {
-            clearTimeout(imageTimeoutRef.current);
-            imageTimeoutRef.current = null;
-          }
-          setHasError(true);
-        }}
-        onLoad={() => {
-          if (imageTimeoutRef.current) {
-            clearTimeout(imageTimeoutRef.current);
-            imageTimeoutRef.current = null;
-          }
-        }}
-      />
+      <BasemapImage key={mapUrl} url={mapUrl} alt={`Map for ${roadmap.name}`} />
       {markers.map((m, i) => {
         const style: React.CSSProperties = { left: `${m.xPct}%`, top: `${m.yPct}%` };
         if (m.kind === 'roadmap') {

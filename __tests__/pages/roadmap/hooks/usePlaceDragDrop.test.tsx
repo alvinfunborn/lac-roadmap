@@ -157,3 +157,45 @@ describe('usePlaceDragDrop.onDrop — segment recompute', () => {
     expect(calcCalls).toEqual([]);
   });
 });
+
+test('drag autoscroll moves the nested list at both edges and stops on teardown', () => {
+  jest.useFakeTimers();
+  const Sortable = require('sortablejs');
+  const wrapper = document.createElement('div');
+  const list = document.createElement('div');
+  wrapper.style.overflowY = 'auto';
+  wrapper.appendChild(list);
+  document.body.appendChild(wrapper);
+  Object.defineProperties(wrapper, { scrollHeight: { value: 2000 }, scrollWidth: { value: 300 } });
+  wrapper.getBoundingClientRect = () => ({ top: 100, bottom: 500, left: 0, right: 300, width: 300, height: 400 } as DOMRect);
+  const original = document.elementFromPoint;
+  document.elementFromPoint = () => list;
+  const data: Roadmap = { id: 'R', name: 'R', detail: {}, items: [place('A', 1, 1)] };
+  const view = renderHook(() => usePlaceDragDrop({ data, filePath: 'R.md', repository: makeRepoMock(data) as any,
+    settings: DEFAULT_SETTINGS, groups: {}, groupKeys: [], lastPlaceIndex: 0,
+    tempDayKeys: [], setTempDayKeys: jest.fn(), visibleItemIndices: [0],
+    cardListRef: { current: list }, scrollContainerRef: { current: wrapper }, onDataChanged: jest.fn() }));
+  const sortable = Sortable.get(list);
+  expect(sortable.options.scroll).toBe(wrapper);
+  act(() => {
+    sortable.scroll._handleAutoScroll({ clientX: 150, clientY: 490 });
+    jest.advanceTimersByTime(120);
+  });
+  expect(wrapper.scrollTop).toBeGreaterThan(0);
+  wrapper.scrollTop = 500;
+  act(() => {
+    for (let i = 0; i < 20; i++) {
+      jest.advanceTimersByTime(17);
+      sortable.scroll._handleAutoScroll({ clientX: 150, clientY: 110 });
+    }
+  });
+  expect(wrapper.scrollTop).toBeLessThan(500);
+  view.unmount();
+  const stopped = wrapper.scrollTop;
+  act(() => { jest.advanceTimersByTime(500); });
+  expect(wrapper.scrollTop).toBe(stopped);
+  document.elementFromPoint = original;
+  wrapper.remove();
+  jest.clearAllTimers();
+  jest.useRealTimers();
+});
