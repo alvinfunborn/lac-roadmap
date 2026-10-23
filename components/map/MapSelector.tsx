@@ -178,7 +178,7 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
     // Give each initialization its own DOM host, so a late SDK response cannot
     // paint into (or destroy) the next provider's map after a quick switch.
     const host = document.createElement('div');
-    host.style.cssText = 'width:100%;height:100%';
+    host.className = 'lac-map-sdk-host';
     container.replaceChildren(host);
     const inst = MapProviderFactory.createProvider(target, apiKey, 'zh', target === 'gaode' ? settings.gaodeWebServiceKey : undefined);
     providerRef.current = inst;
@@ -255,10 +255,10 @@ export default function MapSelector({ visible, initialLocation, onCancel, onConf
     return () => {
       vv.removeEventListener('resize', sync);
       vv.removeEventListener('scroll', sync);
-      el.style.top = '';
-      el.style.left = '';
-      el.style.width = '';
-      el.style.height = '';
+      el.style.removeProperty('top');
+      el.style.removeProperty('left');
+      el.style.removeProperty('width');
+      el.style.removeProperty('height');
     };
   }, [visible]);
 

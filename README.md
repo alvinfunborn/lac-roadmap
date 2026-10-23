@@ -206,3 +206,7 @@ Main components:
 ## License
 
 MIT License
+
+## Privacy and network use
+
+Maps are optional. With provider None, no map service is requested. Enabling Google Maps or AMap loads that provider's remote JavaScript SDK and map tiles, and sends place search queries and coordinates to the selected provider for search, geocoding and route calculation. These features require your own provider account and API key and may incur provider charges. Notes stay in your vault; map queries are processed by the provider. API keys are saved in local plugin settings (data.json); do not commit or share that file. The plugin does not collect analytics.

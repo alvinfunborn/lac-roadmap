@@ -76,7 +76,7 @@ start_time = "2025-10-04 15:00"`;
         }));
 
     // 地图分区
-    containerEl.createEl('h3', { text: t('settings.map.title') });
+    new Setting(containerEl).setName(t('settings.map.title')).setHeading();
 
     new Setting(containerEl)
       .setName(t('settings.map.provider.name'))

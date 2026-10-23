@@ -2,3 +2,5 @@ data.json
 node_modules
 coverage/
 .DS_Store
+# Local plugin settings can contain API keys.
+data.json

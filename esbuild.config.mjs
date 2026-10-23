@@ -1,6 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
-import builtins from "builtin-modules";
+import { builtinModules as builtins } from "node:module";
 import fs from "fs";
 import path from "path";
 import * as sass from "sass";
@@ -63,7 +63,7 @@ const jsContext = await esbuild.context({
         ...builtins
     ],
     format: "cjs",
-    target: "es2018",
+	target: "es2020",
     logLevel: "info",
     sourcemap: prod ? false : "inline",
     treeShaking: true,

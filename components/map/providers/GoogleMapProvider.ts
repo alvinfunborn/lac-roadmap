@@ -83,10 +83,7 @@ export class GoogleMapProvider implements IMapProvider {
     // Render a small red circle dot without labels
     if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
       const el = document.createElement('div');
-      el.style.width = '6px';
-      el.style.height = '6px';
-      el.style.borderRadius = '50%';
-      el.style.background = '#ff3b30';
+      el.className = 'lac-map-marker-dot';
       const marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat, lng }, map: this.mapInstance, title: title || '', content: el });
       return marker;
     }
