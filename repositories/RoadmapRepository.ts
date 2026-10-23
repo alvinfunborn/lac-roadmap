@@ -1,6 +1,6 @@
 import { App, TFile, Notice } from 'obsidian';
 import * as TOML from 'toml';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-var-requires -- tomlify-j0.4 exports a CommonJS serializer without TypeScript declarations.
 const TOMLStringify: { toToml: (obj: unknown) => string } = require('tomlify-j0.4');
 import { Roadmap, Place, RouteSegment, computeRoadmapEndpoints } from '../types/roadmap';
 import { dayNumber, isDatedRoadmap, scheduleDetail } from '../utils/schedule';
