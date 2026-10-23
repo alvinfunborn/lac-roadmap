@@ -1,6 +1,9 @@
 # Community review: optional map SDK loading
 
-This note is prepared for review. It has not been sent to Obsidian support.
+Submitted to Obsidian support on 2026-10-23 through Roadmap's **Get help →
+A review flagged something incorrectly** form. The request covers both entries
+below and is visible under **Your Help Requests** with status **open**.
+No manual approval or response has been received yet.
 
 ## Entries and releases
 
