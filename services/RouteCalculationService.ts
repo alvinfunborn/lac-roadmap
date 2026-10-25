@@ -1,6 +1,7 @@
 import { Place, RouteSegment, TravelMode } from '../types/roadmap';
 import { CoordinateConverter } from '../components/map/GoogleMap';
 import { requestUrl } from 'obsidian';
+import { MapProvider } from '../utils/mapProvider';
 
 export interface RouteCalculationResult {
   distance: number; // 米
@@ -32,8 +33,9 @@ export class RouteCalculationService {
     from: Place,
     to: Place,
     travelMode: TravelMode = 'transit',
-    provider: 'google' | 'gaode' = 'google'
+    provider: MapProvider = 'google'
   ): Promise<RouteCalculationResult | null> {
+    if (provider === 'none') return null;
     const fromLoc = from.detail?.address;
     const toLoc = to.detail?.address;
 

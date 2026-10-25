@@ -19,6 +19,11 @@ beforeEach(() => {
 });
 
 describe('RouteCalculationService.calculateRoute (preconditions)', () => {
+  it('makes no request for None with both keys and valid coordinates', async () => {
+    const svc = new RouteCalculationService('saved-google-key', 'saved-amap-key');
+    expect(await svc.calculateRoute(place('A', 100, 30), place('B', 101, 31), 'drive', 'none')).toBeNull();
+    expect(getRequestUrlCalls()).toEqual([]);
+  });
   it('returns null when from-coords missing', async () => {
     const svc = new RouteCalculationService('gkey');
     const from: Place = { id: 'A', name: 'A', detail: {} };

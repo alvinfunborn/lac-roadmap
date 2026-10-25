@@ -5,6 +5,7 @@ import { MapLocation } from '../types/map';
 import { RoadmapSettings } from '../types';
 import { CoordinateConverter } from './map/GoogleMap';
 import { isPlace } from '../utils/typeGuards';
+import { resolveMapProvider } from '../utils/mapProvider';
 
 // 将地点坐标转为目标体系：Google 用 WGS84，高德用 GCJ-02
 function toTargetCoords(loc: MapLocation, useGaode: boolean): { lng: number; lat: number } {
@@ -122,10 +123,11 @@ export default function StaticMap({ roadmap, settings }: StaticMapProps) {
   const [hasCoordinates, setHasCoordinates] = useState(false);
   const [placeCount, setPlaceCount] = useState(0);
   const [markers, setMarkers] = useState<PositionedMarker[]>([]);
+  const provider = resolveMapProvider(settings, roadmap.detail?.map_provider);
 
   useEffect(() => {
     const generateMapUrl = () => {
-      const provider = (roadmap.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+      if (provider === 'none') return;
       const useGaode = provider === 'gaode';
 
       // Collect raw markers (lat/lng + kind/status). Pixel positioning is
@@ -231,9 +233,9 @@ export default function StaticMap({ roadmap, settings }: StaticMapProps) {
     };
 
     generateMapUrl();
-  }, [roadmap, settings]);
+  }, [roadmap, settings, provider]);
 
-  if (!hasCoordinates || hasError || !mapUrl) {
+  if (provider === 'none' || !hasCoordinates || hasError || !mapUrl) {
     return (
       <div className="lac-card-map-placeholder">
         <span className="lac-card-map-placeholder-text">map</span>

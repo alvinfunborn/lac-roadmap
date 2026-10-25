@@ -1,3 +1,4 @@
+import { resolveMapProvider } from '../../utils/mapProvider';
 import { useEffect, useState } from 'react';
 import { MapLocation } from '../../types/map';
 import MapSelector from '../map/MapSelector';
@@ -367,7 +368,7 @@ export default function PlaceEditModal({ visible, initial, settings, onCancel, o
         }}
         settings={{
           // trip 级 provider 优先；MapSelector 直接读 mapApiProvider 当 provider 用
-          mapApiProvider: preferredProvider || settings.mapApiProvider,
+          mapApiProvider: resolveMapProvider(settings, preferredProvider),
           gaodeJsApiKey: settings.gaodeJsApiKey,
           gaodeWebServiceKey: settings.gaodeWebServiceKey,
           googleMapsApiKey: settings.googleMapsApiKey

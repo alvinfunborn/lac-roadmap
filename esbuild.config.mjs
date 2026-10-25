@@ -19,6 +19,7 @@ const jsContext = await esbuild.context({
     banner: { js: banner },
     entryPoints: ["main.ts"],
     bundle: true,
+    footer: { js: `/*!\n${fs.readFileSync("THIRD_PARTY_NOTICES.txt", "utf8").replaceAll("\r\n", "\n")}*/` },
     external: [
         "obsidian",
         "electron",

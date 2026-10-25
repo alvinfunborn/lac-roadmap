@@ -182,7 +182,7 @@ LaC/Roadmap/
 - 轻量 TOML 读写器，保留开头注释，支持正文中的 `[[wikilink]]`。
 - Provider 抽象层（`IMapProvider` + `GoogleMapProvider` / `AmapProvider`），所有地图组件对两种 provider 等价兼容。
 - 坐标转换（WGS84 ↔ GCJ-02）在 provider 边界完成，地点文件始终保留其声明的坐标系。
-- Field Journal 设计 token 都在 `styles/_variables.scss`；字体走系统 fallback chain（不打包字体、不发起网络请求）。
+- Field Journal 设计 token 都在 `styles/_variables.scss`；字体走系统 fallback chain（字体不需要网络下载；可选地图仍会联网，见下文）。
 - Jest 测试 220+，覆盖仓储 / hooks / services / 端到端流程。
 
 ## 架构
@@ -206,6 +206,19 @@ LaC/Roadmap/
 
 MIT License
 
+打包依赖的完整许可证见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)，分发的 `main.js` 中也包含这些声明。
+
+
 ## 隐私与网络使用
 
-地图为可选功能，提供商选择 None 时不请求地图服务。启用 Google Maps 或高德地图后，会加载所选提供商的远程 JavaScript SDK 和地图瓦片，并向其发送地点搜索词、坐标，用于搜索、地理编码和路径规划。需要自行申请提供商账户和 API Key，服务可能产生费用。笔记保存在 Vault，地图查询由所选提供商处理。API Key 保存于本地插件设置 data.json，请勿提交或分享该文件。本插件不收集分析遥测。
+地图可选，默认关闭。提供商为 None 时，插件不发起地图服务请求。None 也会关闭已保存的路线级地图覆盖设置、静态缩略图和自动路径重算。选择 Google Maps 或高德地图并配置自己的 API Key 后，使用地图或地点功能会联网，包括静态预览，以及编辑或重排地点后的路径重算。
+
+- Google Maps：从 `https://maps.googleapis.com/maps/api/js` 加载可执行 JavaScript 及提供商管理的资源，用于地图、标记、搜索和地理编码；静态预览和路径规划还会调用 Google Maps Web 服务。
+- 高德地图：从 `https://webapi.amap.com/maps` 加载可执行 JavaScript 及提供商管理的资源。搜索、逆地理编码、坐标转换、静态预览及路径规划调用 `https://restapi.amap.com/`。
+- 请求会向所选提供商暴露 IP 地址和 API Key，并发送相关搜索词、地图视野和坐标；相关处理适用 [Google 隐私政策](https://policies.google.com/privacy) 和 [高德隐私政策](https://lbs.amap.com/pages/privacy/)。
+- 需要提供商账户和 API Key，计费、配额及费用取决于提供商方案。社区目录付款类型为 **Optional payment**。插件不自行收集分析遥测，不上传整份笔记文件；所选地图数据会按上述说明发送。
+- API Key 以未加密形式保存在 Vault 的插件设置 `data.json` 中，Vault 备份或同步工具可能复制该文件。请勿提交或分享，并在提供商后台限制 Key 用途和用量。
+
+SDK 在 Obsidian 内执行，不在隔离框架中；固定加载入口不代表下游全部代码已锁定。该集成仍在等待目录人工复核，详见 [复核说明](docs/community-review.md)。
+
+更改地图设置后，请重新打开插件视图。如果 SDK 已加载且需要停止其活动，请选择 None 并重启 Obsidian；已发出的请求无法撤回。

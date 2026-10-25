@@ -1,3 +1,4 @@
+import { resolveMapProvider } from '../../utils/mapProvider';
 import React, { useEffect, useMemo, useState } from 'react';
 import { MapLocation } from '../../types/map';
 import { MapProviderKind, RoadmapDetail, Place, RouteSegment, hasCoords } from '../../types/roadmap';
@@ -323,7 +324,7 @@ export default function RoadmapEditModal({ visible, initial, mode, settings, onC
         settings={{
           ...settings,
           // 用 trip 当前选定的 provider 覆盖全局；FOLLOW_GLOBAL 时落回全局值
-          mapApiProvider: mapProvider === FOLLOW_GLOBAL ? settings.mapApiProvider : mapProvider,
+          mapApiProvider: resolveMapProvider(settings, mapProvider === FOLLOW_GLOBAL ? undefined : mapProvider),
         }}
         routeLocations={viewerLocations}
         readOnly={true}

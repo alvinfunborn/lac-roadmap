@@ -1,4 +1,5 @@
 import MapStatusLegend from './MapStatusLegend';
+import { resolveMapProvider } from '../../utils/mapProvider';
 import { useEffect, useRef, useState } from 'react';
 import { App, TFile } from 'obsidian';
 import { RoadmapRepository } from '../../repositories/RoadmapRepository';
@@ -71,7 +72,7 @@ export default function AggregatedMap({ app, repository, settings, overrideLocat
   const [scopeTitle, setScopeTitle] = useState<string>('');
   const [pointCount, setPointCount] = useState<number>(0);
 
-  const effectiveProvider = preferredProvider ?? (settings?.mapApiProvider || 'none');
+  const effectiveProvider = resolveMapProvider(settings, preferredProvider);
   useEffect(() => {
     const prov = effectiveProvider as 'none' | 'google' | 'gaode';
     const hasKey = prov === 'google' ? !!settings?.googleMapsApiKey : prov === 'gaode' ? !!(settings?.gaodeJsApiKey || settings?.gaodeWebServiceKey) : false;

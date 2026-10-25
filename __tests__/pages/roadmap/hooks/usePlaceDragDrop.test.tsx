@@ -32,6 +32,24 @@ function place(name: string, lat: number, lng: number): Place {
 
 beforeEach(() => { calcCalls.length = 0; });
 
+test('None permits reorder but skips route recalculation with saved keys and a trip override', async () => {
+  const A = place('A', 1, 1), B = place('B', 2, 2), C = place('C', 3, 3);
+  const seg: RouteSegment = { travelMode: 'walk', distance: 123, duration: 5 };
+  const data: Roadmap = { id: 'R', name: 'R', detail: { map_provider: 'google' }, items: [A, seg, B, C] };
+  const repo = makeRepoMock(data);
+  const { result } = renderHook(() => usePlaceDragDrop({
+    data, filePath: 'R.md', repository: repo as any,
+    settings: { ...DEFAULT_SETTINGS, googleMapsApiKey: 'saved-key' },
+    groups: {}, groupKeys: [], lastPlaceIndex: 3, tempDayKeys: [], setTempDayKeys: jest.fn(),
+    visibleItemIndices: [0, 2, 3], cardListRef: { current: null } as any, onDataChanged: jest.fn(),
+  }));
+  act(() => { result.current.dragIndexRef.current = 2; });
+  await act(async () => { await result.current.onDrop(3); });
+  expect(repo.updateRoadmapItems).toHaveBeenCalled();
+  expect(calcCalls).toEqual([]);
+  expect(seg.distance).toBe(123);
+});
+
 describe('usePlaceDragDrop.onDrop — segment recompute', () => {
   it('recomputes only the segments whose endpoints changed, with correct prev→next', async () => {
     // A —sAB→ B —sBC→ C —sCD→ D. Drag B to sit between C and D.
@@ -53,7 +71,7 @@ describe('usePlaceDragDrop.onDrop — segment recompute', () => {
       data,
       filePath: 'LaC/Roadmap/R.md',
       repository: repo as any,
-      settings: { ...DEFAULT_SETTINGS },
+      settings: { ...DEFAULT_SETTINGS, mapApiProvider: 'google', googleMapsApiKey: 'test' },
       groups: {},
       groupKeys: [],
       lastPlaceIndex: 6,
@@ -100,7 +118,7 @@ describe('usePlaceDragDrop.onDrop — segment recompute', () => {
       data,
       filePath: 'LaC/Roadmap/R.md',
       repository: repo as any,
-      settings: { ...DEFAULT_SETTINGS },
+      settings: { ...DEFAULT_SETTINGS, mapApiProvider: 'google', googleMapsApiKey: 'test' },
       groups: {},
       groupKeys: [],
       lastPlaceIndex: 4,
@@ -140,7 +158,7 @@ describe('usePlaceDragDrop.onDrop — segment recompute', () => {
       data,
       filePath: 'LaC/Roadmap/R.md',
       repository: repo as any,
-      settings: { ...DEFAULT_SETTINGS },
+      settings: { ...DEFAULT_SETTINGS, mapApiProvider: 'google', googleMapsApiKey: 'test' },
       groups: {},
       groupKeys: [],
       lastPlaceIndex: 4,

@@ -11,6 +11,7 @@ import ConfirmModal from '../../../components/modals/ConfirmModal';
 import { RoadmapEditPayload } from '../../../components/modals/RoadmapEditModal';
 import { t } from '../../../i18n';
 import { anchorFromPlace } from '../../../utils/schedule';
+import { MapProvider, resolveMapProvider } from '../../../utils/mapProvider';
 
 interface PlaceEditPayload {
   name: string;
@@ -103,7 +104,8 @@ export function usePlaceMutations({
       settings?.googleMapsApiKey,
       settings?.gaodeWebServiceKey,
     );
-    const provider = (data?.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+    const provider = resolveMapProvider(settings, data?.detail?.map_provider);
+    if (provider === 'none') return;
 
     const resolveEndpoint = async (p: Place, direction: 'entry' | 'exit'): Promise<Place> => {
       const subPath = subRouteMap[p.id];
@@ -205,12 +207,13 @@ export function usePlaceMutations({
   // 「进 / 出这条子路线」的 route 段按新端点重算。父路线的衔接距离不会自己刷新 ——
   // 不重算的话，在子路线加 / 删头尾地点后，父级距离会一直停在旧值。
   const syncParentRouteSegments = async (subName: string, newStart?: Address, newEnd?: Address) => {
+    if (resolveMapProvider(settings) === 'none') return;
     try {
       const parents = await repository.findRoadmapsReferencingPlace(subName);
       if (parents.length === 0) return;
       const service = new RouteCalculationService(settings?.googleMapsApiKey, settings?.gaodeWebServiceKey);
       const asPlace = (addr: Address): Place => ({ id: subName, name: subName, detail: { address: addr } });
-      const recalc = async (from: Place, to: Place, travelMode: RouteSegment['travelMode'], provider: 'google' | 'gaode'): Promise<RouteSegment | null> => {
+      const recalc = async (from: Place, to: Place, travelMode: RouteSegment['travelMode'], provider: MapProvider): Promise<RouteSegment | null> => {
         const result = await service.calculateRoute(from, to, travelMode, provider);
         if (!result) return null;
         return { travelMode: result.travelMode, distance: result.distance, duration: result.duration, tolls: typeof result.tolls === 'number' ? result.tolls : 0 };
@@ -220,7 +223,7 @@ export function usePlaceMutations({
         const parent = await repository.loadRoadmap(parentPath);
         if (!parent) continue;
         const items = [...parent.items];
-        const provider = (parent.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+        const provider = resolveMapProvider(settings, parent.detail?.map_provider);
         let changed = false;
         for (let i = 0; i < items.length; i++) {
           const it = items[i];
@@ -488,10 +491,10 @@ export function usePlaceMutations({
       for (let i = targetIdx + 1; i < data.items.length; i++) { if (isPlace(data.items[i])) { nextPlace = data.items[i] as Place; break; } }
       const bridge = prevIdx >= 0 ? remaining[prevIdx + 1] : undefined;
       const prevPlace = prevIdx >= 0 ? (data.items[prevIdx] as Place) : undefined;
-      if (prevPlace && nextPlace && bridge && isRouteSegment(bridge)) {
+      if (prevPlace && nextPlace && bridge && isRouteSegment(bridge) && resolveMapProvider(settings) !== 'none') {
         try {
           const service = new RouteCalculationService(settings?.googleMapsApiKey, settings?.gaodeWebServiceKey);
-          const provider = (data.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+          const provider = resolveMapProvider(settings, data.detail?.map_provider);
           const result = await service.calculateRoute(prevPlace, nextPlace, (bridge as RouteSegment).travelMode, provider);
           if (result) {
             (bridge as RouteSegment).distance = result.distance;

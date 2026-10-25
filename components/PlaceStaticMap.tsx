@@ -1,5 +1,6 @@
 import React from 'react';
 import BasemapImage from './BasemapImage';
+import { resolveMapProvider } from '../utils/mapProvider';
 import { RoadmapSettings } from '../types';
 import { CoordinateConverter } from './map/GoogleMap';
 import type { PlaceStatus } from '../utils/placeStatus';
@@ -77,11 +78,11 @@ export default function PlaceStaticMap({
   settings,
   autoFit = false,
 }: PlaceStaticMapProps) {
-  const provider = (preferredProvider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+  const provider = resolveMapProvider(settings, preferredProvider);
   const useGaode = provider === 'gaode';
   const hasGoogle = !!settings?.googleMapsApiKey;
   const hasGaode = !!settings?.gaodeWebServiceKey;
-  if ((useGaode && !hasGaode) || (!useGaode && !hasGoogle)) {
+  if (provider === 'none' || (useGaode && !hasGaode) || (!useGaode && !hasGoogle)) {
     return (
       <div className="lac-card-map-placeholder">
         <span className="lac-card-map-placeholder-text">map</span>

@@ -25,6 +25,14 @@ const props = { visible: true, settings, readOnly: true, routeMarkerStyle: 'circ
   routeLocations: locations, onCancel: jest.fn(), onConfirm: jest.fn() };
 beforeEach(() => { instances.length = 0; pendingInit = undefined; });
 
+test('None prevents both picker and aggregate SDK loading despite saved keys and trip override', () => {
+  const offline = { ...settings, mapApiProvider: 'none' as const };
+  render(<><MapSelector {...props} settings={offline} />
+    <AggregatedMap app={{} as any} repository={{} as any} settings={offline}
+      preferredProvider="google" overrideLocations={[]} /></>);
+  expect(instances).toHaveLength(0);
+});
+
 test('overview and enlarged viewer preserve all three statuses', async () => {
   const view = render(<MapSelector {...props} />);
   await waitFor(() => expect(instances[0].displaySearchMarkers).toHaveBeenCalled());

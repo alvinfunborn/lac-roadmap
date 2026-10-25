@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 import { Place, RouteSegment, TravelMode } from '../../types/roadmap';
 import { RouteCalculationService } from '../../services/RouteCalculationService';
 import { t } from '../../i18n';
+import { resolveMapProvider } from '../../utils/mapProvider';
 
 interface Props {
   visible: boolean;
@@ -89,15 +90,12 @@ export default function RouteSegmentEditModal({
     }
   }, [visible, initial]);
 
-  const resolveProvider = (): 'google' | 'gaode' => {
-    if (preferredProvider) return preferredProvider;
-    return settings?.mapApiProvider === 'gaode' ? 'gaode' : 'google';
-  };
-
   // 实际计算逻辑。mode 显式传入：改交通方式时用的是最新值，而 setTravelMode
   // 是异步的，直接读 state 会拿到旧值。silent=true 用于「切换交通方式自动重算」
   // 场景，失败时不弹 Notice（避免没坐标的段每点一下就报错）。
   const runCalculate = async (mode: TravelMode, silent = false): Promise<void> => {
+    const provider = resolveMapProvider(settings, preferredProvider);
+    if (provider === 'none') return;
     if (!from || !to) {
       if (!silent) new Notice(t('modal.routeSegment.noEndpoints'));
       return;
@@ -105,7 +103,6 @@ export default function RouteSegmentEditModal({
     setCalculating(true);
     try {
       const service = new RouteCalculationService(settings?.googleMapsApiKey, settings?.gaodeWebServiceKey);
-      const provider = resolveProvider();
       const result = await service.calculateRoute(from, to, mode, provider);
       if (!result) {
         if (!silent) new Notice(t('modal.routeSegment.calcFailed'));
@@ -196,7 +193,7 @@ export default function RouteSegmentEditModal({
               type="button"
               className="lac-btn lac-btn-cancel"
               onClick={autoCalculate}
-              disabled={calculating || !from || !to}
+              disabled={calculating || !from || !to || resolveMapProvider(settings, preferredProvider) === 'none'}
               title={!from || !to ? t('modal.routeSegment.noEndpoints') : t('modal.routeSegment.autoCalc')}
             >{calculating ? t('modal.routeSegment.calculating') : t('modal.routeSegment.autoCalc')}</button>
             {initial && onDelete ? (

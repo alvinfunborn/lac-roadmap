@@ -66,7 +66,7 @@ function makeHookParams(overrides: Partial<Parameters<typeof usePlaceMutations>[
   return {
     app: app as any,
     repository: makeRepoMock(data) as any,
-    settings: { ...DEFAULT_SETTINGS },
+    settings: { ...DEFAULT_SETTINGS, mapApiProvider: 'google', googleMapsApiKey: 'test' },
     filePath: 'LaC/Roadmap/R.md',
     data,
     setData,
@@ -323,6 +323,19 @@ describe('usePlaceMutations.deletePlace by index', () => {
 });
 
 describe('usePlaceMutations.onSavePlace (auto-insert routes)', () => {
+  it('saves a place without inserting online routes when None overrides a saved trip provider', async () => {
+    const prev: Place = { id: 'P', name: 'P', detail: { address: { longitude: 116, latitude: 40 } } };
+    const data: Roadmap = { id: 'R', name: 'R', detail: { map_provider: 'google' }, items: [prev] };
+    const repo = makeRepoMock(data);
+    routeMock.__setRouteResult({ distance: 999, duration: 9, travelMode: 'drive' });
+    const params = makeHookParams({ data, repository: repo as any,
+      settings: { ...DEFAULT_SETTINGS, googleMapsApiKey: 'saved-key' } });
+    const { result } = renderHook(() => usePlaceMutations(params));
+    await act(async () => { await result.current.onSavePlace({ name: 'N', address: { longitude: 117, latitude: 41 } }); });
+    const items = repo.updateRoadmapItems.mock.calls[0][3] as Array<Place | RouteSegment>;
+    expect(items).toHaveLength(2);
+    expect(items.every(item => !('travelMode' in item))).toBe(true);
+  });
   it('inserts a route segment after the new place when prev place has coords and calculation succeeds', async () => {
     const prev: Place = {
       id: 'P', name: 'P',

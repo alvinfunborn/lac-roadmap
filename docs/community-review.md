@@ -54,3 +54,32 @@ types, coordinate conversions, place search and route overlays before release.
 
 The aim is to meet the directory's security requirements while preserving
 working map functionality. No exception or manual approval has been obtained.
+
+## Submission readiness follow-up — 2026-10-25
+
+The original request above remains open, with no response visible in the
+management page on 2026-10-25. It names the original releases; the current
+follow-up releases are LifeFlow **1.0.3** and Roadmap **1.4.11**.
+
+- Roadmap 1.4.11 fixes an offline-setting mismatch: static thumbnails and
+  route calculation could still use a saved Google key when None was selected.
+  None now takes precedence over saved trip overrides at map and routing entry
+  points. Enabling maps still supports trip-specific Google/AMap selection.
+- READMEs now distinguish plugin data storage from the search terms, viewport
+  coordinates, IP address and keys sent to providers. They disclose static
+  previews and edit/reorder-triggered route requests, provider billing, and
+  unencrypted settings that vault backup/sync tools may copy.
+- Bundled dependencies now carry their full license notices in the source
+  repository and distributed main.js, including for CostSet 1.0.2.
+- Loader code is unchanged. Fixed entry URLs do not pin downstream SDK code,
+  and these disclosures do not resolve the scanner's dynamic-script error.
+- To verify offline behavior with existing keys: select None, restart Obsidian,
+  open a trip with a saved provider override and coordinates, and edit/reorder
+  places. Thumbnails/SDKs must not start and automatic routes must not be
+  requested; local editing must still work. After opting in, map previews and
+  provider overrides remain available. Automated regression tests cover these
+  map/routing boundaries; real-device SDK interaction is a separate manual check.
+
+The request is still for an explicit ruling on the current SDK integration,
+not an assertion that documentation or successful unit tests constitutes
+manual approval.

@@ -1,3 +1,4 @@
+import { resolveMapProvider } from '../../utils/mapProvider';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { App, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import { RoadmapRepository } from '../../repositories/RoadmapRepository';
@@ -867,7 +868,7 @@ export default function RoadmapPage({ app, repository, filePath, settings, leaf:
         onConfirm={() => setHeroViewerVisible(false)}
         settings={{
           ...settings,
-          mapApiProvider: data?.detail?.map_provider || settings.mapApiProvider,
+          mapApiProvider: resolveMapProvider(settings, data?.detail?.map_provider),
         }}
         routeLocations={mapLocations.map(l => ({
           name: l.title,

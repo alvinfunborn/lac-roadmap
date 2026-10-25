@@ -183,7 +183,7 @@ The map at the top of trip / trip-list pages is a preview. Click it to open a fu
 - Lightweight TOML reader / writer that preserves leading comments and supports `[[wikilinks]]` inside the body.
 - Provider abstraction (`IMapProvider` + `GoogleMapProvider` / `AmapProvider`) so all map widgets work identically against either provider.
 - Coordinate conversion (WGS84 ↔ GCJ-02) applied at the provider boundary so place files keep their declared coordinate system.
-- Field-Journal redesign tokens live in `styles/_variables.scss`; falls back to system serif / sans / mono fonts so no font assets are bundled and no network requests are made.
+- Field-Journal redesign tokens live in `styles/_variables.scss`; falls back to system serif / sans / mono fonts so fonts need no downloads; optional map features still use the network as described below.
 - 220+ Jest tests covering repositories, hooks, services, and integration paths.
 
 ## Architecture
@@ -207,6 +207,19 @@ Main components:
 
 MIT License
 
+Bundled dependency licenses are reproduced in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and in the distributed `main.js`.
+
+
 ## Privacy and network use
 
-Maps are optional. With provider None, no map service is requested. Enabling Google Maps or AMap loads that provider's remote JavaScript SDK and map tiles, and sends place search queries and coordinates to the selected provider for search, geocoding and route calculation. These features require your own provider account and API key and may incur provider charges. Notes stay in your vault; map queries are processed by the provider. API keys are saved in local plugin settings (data.json); do not commit or share that file. The plugin does not collect analytics.
+Maps are optional and disabled by default. With provider None, the plugin does not initiate map-service requests. None also disables saved trip-level map overrides, static thumbnails and automatic route recalculation. Enabling Google Maps or AMap with your own API keys allows network requests when map views or location features are used, including static previews and recalculation after editing or reordering places.
+
+- Google Maps: loads executable JavaScript from `https://maps.googleapis.com/maps/api/js` and provider-managed assets for maps, markers, place search and geocoding; static previews and routing also use Google Maps web services.
+- AMap: loads executable JavaScript from `https://webapi.amap.com/maps` and provider-managed assets. Search, reverse geocoding and coordinate conversion, static previews and routing use `https://restapi.amap.com/`.
+- Requests expose your IP address and API key to the selected provider, and send the relevant search terms, map viewport and coordinates. Map services process these queries under their own policies: [Google Privacy Policy](https://policies.google.com/privacy), [AMap Privacy Policy](https://lbs.amap.com/pages/privacy/).
+- These features require a provider account and API key; billing, quotas and charges depend on your provider plan. The directory payment type is **Optional payment**. The plugin does not collect analytics or upload entire note files; selected map data is sent as described above.
+- API keys are stored unencrypted in the vault's plugin settings (`data.json`). Vault backup/sync tools may copy that file. Do not commit or share it; restrict keys and set usage limits with the provider.
+
+The SDKs execute inside Obsidian, rather than in an isolated frame. Fixed loader URLs do not pin all downstream SDK code. Directory approval for this integration is pending; see [the review explanation](docs/community-review.md).
+
+After changing map settings, reopen plugin views. If a map SDK was already loaded and you want to stop its activity, set None and restart Obsidian; already-sent requests cannot be recalled.

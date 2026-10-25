@@ -3,6 +3,7 @@ import { Roadmap, Place, RouteSegment } from '../../../types/roadmap';
 import { RoadmapRepository } from '../../../repositories/RoadmapRepository';
 import { RoadmapSettings } from '../../../types';
 import { RouteCalculationService } from '../../../services/RouteCalculationService';
+import { resolveMapProvider } from '../../../utils/mapProvider';
 import { extractTimeFromDateTime } from '../../../utils/timeValidation';
 import { isPlace, isRouteSegment } from '../../../utils/typeGuards';
 import { compareGroupKey, isDateKey } from '../../../utils/date';
@@ -101,7 +102,8 @@ export function usePlaceDragDrop(params: UsePlaceDragDropParams): PlaceDragDropA
       settings?.googleMapsApiKey,
       settings?.gaodeWebServiceKey
     );
-    const provider = (data?.detail?.map_provider || settings?.mapApiProvider || 'google') as 'google' | 'gaode';
+    const provider = resolveMapProvider(settings, data?.detail?.map_provider);
+    if (provider === 'none') return;
 
     const neighborsOf = (arr: Array<Place | RouteSegment>, seg: RouteSegment): { prev?: Place; next?: Place } => {
       const i = arr.indexOf(seg);
