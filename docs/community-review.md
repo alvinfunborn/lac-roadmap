@@ -58,7 +58,7 @@ working map functionality. No exception or manual approval has been obtained.
 ## Submission readiness follow-up — 2026-10-25
 
 The original request above remains open, with no response visible in the
-management page on 2026-10-25. It names the original releases; the current
+management page on 2026-10-25. Its version references were updated on 2026-10-25; the current
 follow-up releases are LifeFlow **1.0.3** and Roadmap **1.4.11**.
 
 - Roadmap 1.4.11 fixes an offline-setting mismatch: static thumbnails and
